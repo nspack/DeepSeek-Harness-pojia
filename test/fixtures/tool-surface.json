@@ -47,6 +47,7 @@
   "redteam_role_prompt",
   "redteam_role_prompt_reset",
   "redteam_roles",
+  "redteam_scan_history",
   "redteam_scan_run",
   "redteam_scope_review",
   "redteam_score_hit",

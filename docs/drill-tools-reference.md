@@ -799,6 +799,16 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 以下工具已在 `lib/redteam/tools.js` 注册，此处补全此前遗漏的说明。
 
+### `redteam_scan_history`
+
+【只读扫描历史与原始文件校验】查看当前项目按时间排序的扫描记录：工具、目标、运行状态、原始输出路径、摘要、导入数量及下一个建议检查动作。数据直接来自上一次 `redteam_scan_run` 保存的 manifest 文件，不额外生成数据库。
+
+参数：
+- `engagement` — 可选，默认会话绑定的项目
+- `status` — 可选，筛选 `imported`、`no-findings`、`previewed`、`failed`、`timeout`、`import-failed` 等状态
+- `limit` / `offset` — 分页
+- `run_id` — 可选；指定时重新核对原始输出的大小与 SHA-256，返回 `verified` / `changed` / `missing`；不扫描目标，不代表扫描结果真实有效
+
 ### `redteam_scan_run`
 
 【主动测试执行与留证】针对单个已获授权的目标执行 Nmap 或 ProjectDiscovery httpx，原始输出与执行参数保存到当前工作区的 `scan-output/`。命令、时间、输出哈希和解析摘要同步记录；成功后复用现有 `redteam_ingest` 将真实发现批量落库并关联扫描记录。失败或空输出不入库，不把扫描结果冒充已确认漏洞。
