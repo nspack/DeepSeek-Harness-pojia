@@ -60,15 +60,20 @@
 
 ## 2.2 ARTEX 本机联动（安装了 ARTEX 时）
 
-清洗页会自动检测本机 ARTEX 服务的固定健康接口 \`http://127.0.0.1:8787/api/health\`：只有服务返回 \`ok: true\` 且 \`service: "artex"\` 才显示“已连接”，不会因为 8787 端口被其他程序占用就误判。
+清洗台会请求本机 `http://127.0.0.1:8787/api/health`，根据实际响应区分服务状态：
 
-- **服务状态**：显示是否正在运行、ARTEX 报告的版本，以及跳转至本机 ARTEX 的入口（服务在线时）。
-- **工具复用**：发现 \`ARTEX_TOOL_DIRS\` 指定的目录或 Windows \`%LOCALAPPDATA%\ARTEX\tools\` 的 nuclei、httpx、subfinder、ffuf、dnsx 等工具时，dsh-purge 在自己的配置、工具箱、额外目录、PATH 都未找到对应工具后，才自动使用该本机路径；不用复制可执行文件或维护第二份工具配置。
-- **环境提示**：显示能定位到的 ARTEX 工具与共享路径，以及通过 \`ARTEX_SKILL_DIR\` 环境变量明确指定的 Skill 目录（只显示，不自动复制技能）。
-- **未运行也可复用工具**：ARTEX Desktop 退出时，已有的本机工具文件不一定被删除；只要路径还存在，dsh-purge 仍可使用。Docker 容器里的工具不会自动当作 Windows 可执行文件。
-- **手动重新检测**：ARTEX 启动、退出或安装工具之后，可以点击清洗台的「重新检测 ARTEX」，刷新当前状态。
+- **已连接**：健康接口明确返回 `service: "artex"` 与 `ok: true`，才认定 ARTEX 服务身份已确认，显示版本并提供本机 ARTEX 打开入口。
+- **服务候选（身份未确认）**：如果返回 HTTP 401/403、其他异常状态、格式不匹配或无 ARTEX 身份字段，说明本机有服务响应，但不能凭端口断言就是 ARTEX。某些社区维护分支会要求认证；不会因为这个结果索取密码或直接尝试登录。
+- **已安装工具但服务离线**：没有收到健康响应，但在 ARTEX 本机目录中发现工具文件时，仍显示已找到工具；这些文件不要求 ARTEX 后端一直运行。
+- **未检测到**：没有有效服务响应、也没有找到本机 ARTEX 工具时；不会影响清洗或作战台的原有能力。
 
-**不会**自动启动 ARTEX、执行扫描、读取或复制 ARTEX 密钥、数据库、任务及登录信息，也不会覆盖两个项目的配置文件。检查成功不等于 ARTEX 的任务、Skill/MCP 已经连接到 DSH 模型；这部分需要另行验证授权和接口。ARTEX 不存在时清洗台其余功能不受影响。
+工具复用只从用户设置的 `ARTEX_TOOL_DIRS` 或 Windows `%LOCALAPPDATA%\ARTEX\tools` 等已有本机目录寻找 nuclei、httpx、subfinder、ffuf、dnsx 等文件。查找优先级保持为：**用户显式路径 → DSH 自有工具箱与目录 → PATH → ARTEX 本机工具**。只显示文件路径及 DSH 是否采用，**文件被找到不等于已执行版本探测或验证实际兼容**。Docker/WSL 内的文件不会被直接当作 Windows 可执行文件。
+
+清洗台提供「重新检测 ARTEX」；当本机服务已经确认是 ARTEX 时可直接打开它。
+
+也可以在 dsh-purge 源码目录运行 `node scripts/diagnose-artex.mjs`，查看服务状态、HTTP 状态码与工具来源；默认不输出本机完整路径。如确需定位文件，使用 `node scripts/diagnose-artex.mjs --paths`，分享输出前请检查私人目录。通过环境变量 `ARTEX_SKILL_DIR` 指定的目录仅用于展示，不自动复制 Skills。
+
+本功能不会修改两套系统的配置或数据库，也不会读取凭据、自动启动 ARTEX 或发起扫描。ARTEX 的 Agent、MCP、任务和资产并未自动同步到 DSH。
 
 ## 三、应用、还原、卸载：到底有什么区别？
 

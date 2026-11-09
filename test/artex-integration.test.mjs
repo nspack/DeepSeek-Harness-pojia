@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import {
-  artexToolRoots, findArtexTool, inspectArtex, ARTEX_SHARED_TOOLS,
+  artexToolRoots, findArtexTool, inspectArtex, probeLocalArtex, ARTEX_SHARED_TOOLS,
 } from '../lib/artex-integration.js'
 import { resolveTool } from '../lib/redteam/platform-config.js'
 
@@ -93,4 +93,79 @@ test('cleaning UI displays verified local ARTEX service and tool reuse without a
   assert.match(server, /path: "\/dsh-purge\/artex"/)
   assert.match(server, /const state = await inspectArtex\(\)/)
   assert.match(server, /reused: resolveTool\(item\.id\)\.path === item\.path/)
+})
+
+
+test('local health distinguishes verified ARTEX from authenticated or unrelated services', async () => {
+  const examples = [
+    { status: 200, body: { ok: true, service: 'artex', version: '0.5' },
+      expected: 'detected' },
+    { status: 200, body: { ok: false, service: 'artex' }, expected: 'degraded' },
+    { status: 200, body: { ok: true, service: 'other' }, expected: 'service_candidate' },
+    { status: 200, body: { ok: true }, expected: 'service_candidate' },
+    { status: 401, body: {}, expected: 'service_candidate' },
+    { status: 403, body: {}, expected: 'service_candidate' },
+    { status: 404, body: {}, expected: 'service_candidate' },
+    { status: 302, body: {}, expected: 'service_candidate' },
+  ]
+  for (const item of examples) {
+    const got = await probeLocalArtex({ fetchFn: async (url, options) => {
+      assert.equal(url, 'http://127.0.0.1:8787/api/health')
+      assert.equal(options.method, 'GET')
+      assert.equal(options.redirect, 'manual')
+      assert.equal(options.headers, undefined, 'no ARTEX credentials are forwarded')
+      return {
+        status: item.status,
+        ok: item.status >= 200 && item.status < 300,
+        json: async () => item.body,
+      }
+    } })
+    assert.equal(got.state, item.expected, 'HTTP ' + item.status + ' / ' + JSON.stringify(item.body))
+    assert.equal(got.httpStatus, item.status)
+  }
+})
+
+test('malformed health and connection errors do not disrupt DSH', async () => {
+  const malformed = await probeLocalArtex({ fetchFn: async () => ({
+    status: 200, ok: true, json: async () => { throw new SyntaxError('malformed') },
+  }) })
+  assert.equal(malformed.state, 'service_candidate')
+  const unreachable = await probeLocalArtex({ fetchFn: async () => { throw new Error('ECONNREFUSED') } })
+  assert.equal(unreachable.state, 'absent')
+  assert.equal(unreachable.httpStatus, null)
+  assert.ok(!JSON.stringify(unreachable).includes('ECONNREFUSED'))
+})
+
+test('protected endpoint is only an unverified candidate and does not authorize ARTEX UI actions', async (t) => {
+  const home = workspace(t)
+  put(join(home, 'ARTEX', 'tools', 'nuclei', 'current', 'nuclei.exe'))
+  const status = await inspectArtex({
+    env: { LOCALAPPDATA: home },
+    platform: 'win32',
+    probe: async () => ({ state: 'service_candidate', httpStatus: 401, reason: 'authentication required' }),
+  })
+  assert.equal(status.online, false)
+  assert.equal(status.state, 'service_candidate')
+  assert.equal(status.httpStatus, 401)
+  assert.equal(status.toolCount, 1)
+})
+
+test('tool files without a responding service are shown installed/offline, not connected', async (t) => {
+  const home = workspace(t)
+  put(join(home, 'ARTEX', 'tools', 'dnsx', 'current', 'dnsx.exe'))
+  const status = await inspectArtex({
+    env: { LOCALAPPDATA: home }, platform: 'win32',
+    probe: async () => ({ state: 'absent', httpStatus: null }),
+  })
+  assert.equal(status.state, 'installed_offline')
+  assert.equal(status.online, false)
+  assert.equal(status.toolCount, 1)
+})
+
+test('cleaning UI renders ARTEX candidate and offline states separately from verified online', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /service_candidate: "本机 8787 有响应/)
+  assert.match(client, /installed_offline: "检测到 ARTEX 本机工具/)
+  assert.match(client, /status\.online \? h\("a"/)
+  assert.match(client, /文件尚未执行验证/)
 })

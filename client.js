@@ -1595,6 +1595,13 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			useEffect(() => { reload(); }, []);
 			const tools = status && Array.isArray(status.tools) ? status.tools : [];
 			const reused = tools.filter((item) => item.reused).length;
+			const stateText = {
+				detected: "已连接本机 ARTEX",
+				installed_offline: "检测到 ARTEX 本机工具，服务未运行",
+				service_candidate: "本机 8787 有响应，但尚未确认是 ARTEX",
+				degraded: "已识别 ARTEX，健康状态异常",
+				absent: "当前未检测到运行中的 ARTEX",
+			};
 			return h("section", { className: "dshp-artex", "aria-label": "ARTEX 本机联动" },
 				h("div", { className: "dshp-artex-head" },
 					h("strong", null, "ARTEX 本机联动"),
@@ -1603,9 +1610,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				error ? h("p", { className: "dshp-hint", role: "alert" }, "ARTEX 检测失败：" + error) : null,
 				status ? h("div", null,
 					h("p", { className: "dshp-artex-note", role: "status" },
-						status.online ? "已连接本机 ARTEX" + (status.version ? " · " + status.version : "")
-							: "当前未发现运行中的 ARTEX 服务",
-						" · 已复用 " + reused + " 项 · ARTEX 本机工具 " + tools.length + " 项"),
+						stateText[status.state] || (status.online ? "已连接本机 ARTEX" : "ARTEX 状态未知"),
+						status.online && status.version ? " · " + status.version : "",
+						status.httpStatus ? " · HTTP " + status.httpStatus : "",
+						" · DSH 当前采用 " + reused + " 项 · ARTEX 文件 " + tools.length + " 项"),
+					status.note ? h("p", { className: "dshp-artex-note" }, status.note) : null,
 					status.online ? h("a", {
 						href: "http://127.0.0.1:8787/", target: "_blank", rel: "noopener noreferrer",
 					}, "打开 ARTEX") : null,
@@ -1613,9 +1622,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("summary", null, "查看 ARTEX 本机工具路径（" + tools.length + "）"),
 						h("ul", { className: "dshp-artex-tools" }, tools.map((item) =>
 							h("li", { key: item.id }, item.id + " · "
-								+ (item.reused ? "DSH 已复用" : "可用文件，DSH 优先使用其原有配置")
+								+ (item.reused ? "DSH 已复用路径（文件尚未执行验证）" : "找到文件（DSH 未采用，未验证可执行）")
 								+ " · " + item.path))),
-					) : h("p", { className: "dshp-artex-note" }, "尚未找到 ARTEX 在本机管理的工具；如果只运行 Docker，容器内工具不会当作 Windows 可执行文件。"),
+					) : h("p", { className: "dshp-artex-note" }, "尚未找到 ARTEX 在本机管理的工具；Docker 容器内的工具不等于 Windows 本机可执行文件。"),
 					Array.isArray(status.toolRoots) && status.toolRoots.length
 						? h("details", null,
 							h("summary", null, "ARTEX 本机工具目录（" + status.toolRoots.length + "）"),
