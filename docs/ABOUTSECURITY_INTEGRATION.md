@@ -9,7 +9,8 @@
 - **从上游安装**：显式点击后，通过本机 Git 稀疏检出 `wgpsec/AboutSecurity` 的 `skills/`，只安装到当前 `DSH_HOME`；插件启动时不会自动下载。
 - **更新技能**：已有 Git 安装目录时按需执行快进更新；安装/更新进度会在页面显示，完成后刷新技能目录。
 - **检查状态**：显示是否安装及本机可检索技能数量。
-- **浏览正文**：左侧列表有独立的 AboutSecurity 分类，选择条目可以查看 Markdown；宿主提供原生 Skills 服务时，安装后自动注册并在列表中显示“宿主已列出”。没有这个服务时仍能通过 `redteam_skill_search` / `redteam_skill_read` 读取。
+- **用途分类与来源筛选**：左侧主要按侦察、漏洞、Web/API、身份权限、内网、云、自动化等功能分组，再筛选内置红队、AboutSecurity 或 DSH 官方；分类不修改技能正文和检索键。
+- **浏览与注册状态**：选择条目查看 Markdown；宿主原生列表确认时显示「宿主已列出」，宿主状态暂不可查询时显示「待宿主确认」。即使原生服务不可用，也能通过 `redteam_skill_search` / `redteam_skill_read` 检索、读取。
 
 需要 Git 可执行程序在运行 DSH 的那台 Windows/Linux 设备的 PATH 里；若缺少 Git，页面会给出明确错误，不影响已有功能。
 

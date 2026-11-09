@@ -89,6 +89,7 @@ test('host and embedded client both expose the install/status UI without importi
   }
   assert.match(ui, /request\.library === 'aboutsecurity'/)
   assert.match(ui, /hostListed: false/)
-  assert.match(panel, /AboutSecurity（按需安装）/)
+  assert.match(panel, /按功能分类筛选/)
+  assert.match(panel, /按技能来源筛选/)
   assert.match(embedded, /AboutSecurity 扩展技能库/)
 })

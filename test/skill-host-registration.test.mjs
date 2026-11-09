@@ -35,11 +35,15 @@ test('official-only native listing still marks local redteam skills as unregiste
 })
 
 test('native scoped skill listing marks only redteam entries as host-listed', () => {
-  const result = markNativeSkillCatalog(inventory(), 1)
+  const result = markNativeSkillCatalog(inventory(), [
+    { name: 'active-scan', library: 'redteam' },
+    { name: 'aboutsecurity-recon-passive-recon', library: 'aboutsecurity' },
+    { name: 'office-doc', library: 'official' },
+  ])
   assert.equal(result.registryState, 'listed')
-  assert.equal(result.hostListedCount, 1)
+  assert.equal(result.hostListedCount, 3)
   assert.equal(result.items[0].hostListed, true)
-  assert.equal(result.items[1].hostListed, undefined)
+  assert.equal(result.items[1].hostListed, true)
   assert.equal(result.items[2].hostListed, false, 'external skill is readable but not native registered')
   assert.equal(result.items[3].hostListed, true, 'actual native provider is recognized')
   assert.equal(result.items[0].availability, 'available')
@@ -48,5 +52,16 @@ test('native scoped skill listing marks only redteam entries as host-listed', ()
 test('missing or unsuccessful catalogs retain their original error result', () => {
   const bad = { ok: false, error: 'host unavailable' }
   assert.equal(markLocalSkillCatalog(bad, 'empty'), bad)
-  assert.equal(markNativeSkillCatalog(bad, 2), bad)
+  assert.equal(markNativeSkillCatalog(bad, []), bad)
+})
+
+test('native list of unrelated skills must not mark local files as registered', () => {
+  const result = markNativeSkillCatalog(inventory(), [{ name: 'unrelated', library: 'redteam' }])
+  assert.equal(result.hostListedCount, 1)
+  assert.ok(result.items.every((x) => x.hostListed === false))
+})
+test('missing service is distinguished from missing registration', () => {
+  const result = markLocalSkillCatalog(inventory(), 'service-unavailable')
+  assert.match(result.note, /skills/)
+  assert.equal(result.items[0].hostListed, false)
 })

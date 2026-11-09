@@ -5476,6 +5476,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [err, setErr] = React.useState(null)
       const [q, setQ] = React.useState('')
       const [srcOnly, setSrcOnly] = React.useState(false)
+      const [sourceFilter, setSourceFilter] = React.useState('all')
+      const [categoryFilter, setCategoryFilter] = React.useState('all')
       const [active, setActive] = React.useState(null)
       const [detail, setDetail] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -5541,10 +5543,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }, (e) => setErr(String((e && e.message) || e)))
       }
 
+      /* Purpose first, source second. Unmatched upstream entries remain 'other'. */
+      const categories = [
+        { id: 'recon', label: '情报与资产侦察', test: /recon|osint|fofa|shodan|hunter|quake|fingerprint|subdomain|whois|dns|asset|intelligence|情报|侦察|资产|指纹|测绘/i },
+        { id: 'vuln', label: '扫描与漏洞分析', test: /scan|nuclei|fuzz|vuln|cve|exploitdb|audit|漏洞|扫描|审计/i },
+        { id: 'web', label: 'Web 与 API 安全', test: /web|api|xss|csrf|ssrf|xxe|sql|injection|upload|deserialize|middleware|midware|cms|cors|rce|注入|上传|接口/i },
+        { id: 'identity', label: '身份与权限', test: /credential|password|kerberos|ldap|privesc|privilege|auth|lateral|active.directory|提权|凭据|认证|权限/i },
+        { id: 'network', label: '内网与网络', test: /intranet|internal|tunnel|frp|suo5|chisel|proxy|network|pivot|socks|内网|隧道|代理/i },
+        { id: 'cloud', label: '云与容器', test: /cloud|container|docker|kubernetes|k8s|aws|azure|云安全|容器/i },
+        { id: 'automation', label: '自动化与辅助', test: /automation|browser|campaign|planning|workflow|setup|report|evidence|score|coverage|mapping|autopilot|自动化|报告|取证|计划|得分/i },
+      ]
+      const categoryOf = (item) => {
+        const haystack = [item.name, item.description, item.whenToUse].filter(Boolean).join(' ')
+        const found = categories.find((c) => c.test.test(haystack))
+        return found ? found.id : 'other'
+      }
       const needle = q.trim().toLowerCase()
       let filtered = needle
         ? items.filter((s) => (s.name + ' ' + s.description + ' ' + s.whenToUse).toLowerCase().indexOf(needle) >= 0)
         : items
+      if (sourceFilter !== 'all') filtered = filtered.filter((s) => (s.library || 'redteam') === sourceFilter)
+      if (categoryFilter !== 'all') filtered = filtered.filter((s) => categoryOf(s) === categoryFilter)
       if (srcOnly) filtered = filtered.filter((s) => s.library !== 'official' && s.fromPlugin === true)
       if (brokenOnly) filtered = filtered.filter((s) => s.library !== 'official' && (s.availability === 'broken' || s.availability === 'unknown'))
       /* 目录聚合：一眼看出"这么多技能是哪来的"（本项目/别的插件/自带根…） */
@@ -5568,7 +5587,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             }, s.availability === 'available' ? '正文可读' : s.availability === 'broken' ? '正文缺失' : '正文未知'),
           s.hostListed === false
             ? h('span', { className: 'rt-tag', style: { marginLeft: 6 },
-                title: '只发现了本地技能文件，DSH 当前红队预设尚未确认注册此技能' }, '未列入宿主')
+                title: meta.registryState === 'listed' || meta.registryState === 'no-redteam'
+                  ? 'DSH 当前预设的原生技能列表没有该技能' : '宿主状态暂不可查询，不能断言未注册' },
+                meta.registryState === 'listed' || meta.registryState === 'no-redteam'
+                  ? '未列入宿主' : '待宿主确认')
             : s.hostListed === true
               ? h('span', { className: 'rt-tag', style: { marginLeft: 6 },
                   title: 'DSH 技能服务已在当前红队预设列出此技能；不代表实际执行环境已就绪' }, '宿主已列出')
@@ -5583,21 +5605,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ? h('div', { className: 'rt-kb-sub', style: { color: 'var(--dsw-alias-state-warn-primary, #f59e0b)' } },
               '⚠ ' + String(s.problems[0]).slice(0, 60))
           : null))
-      const redteamRows = filtered.filter((s) => s.library !== 'official' && s.library !== 'aboutsecurity').map(renderSkill)
-      const externalRows = filtered.filter((s) => s.library === 'aboutsecurity').map(renderSkill)
-      const officialRows = filtered.filter((s) => s.library === 'official').map(renderSkill)
       const listItems = []
-      if (redteamRows.length > 0) {
-        listItems.push(h('div', { key: 'head-redteam', className: 'rt-kb-sub', style: { margin: '8px 0 4px', fontWeight: 600 } }, '红队技能'))
-        listItems.push.apply(listItems, redteamRows)
-      }
-      if (externalRows.length > 0) {
-        listItems.push(h('div', { key: 'head-aboutsecurity', className: 'rt-kb-sub', style: { margin: '8px 0 4px', fontWeight: 600 } }, 'AboutSecurity（按需安装）'))
-        listItems.push.apply(listItems, externalRows)
-      }
-      if (officialRows.length > 0) {
-        listItems.push(h('div', { key: 'head-official', className: 'rt-kb-sub', style: { margin: '8px 0 4px', fontWeight: 600 } }, '官方技能'))
-        listItems.push.apply(listItems, officialRows)
+      for (const group of categories.concat([{ id: 'other', label: '其他技能' }])) {
+        const rows = filtered.filter((item) => categoryOf(item) === group.id).map(renderSkill)
+        if (rows.length === 0) continue
+        listItems.push(h('div', { key: 'group-' + group.id, className: 'rt-kb-sub',
+          style: { margin: '8px 0 4px', fontWeight: 600 } }, group.label + '（' + rows.length + '）'))
+        listItems.push.apply(listItems, rows)
       }
 
       return h('div', { className: 'rt-split' },
@@ -5606,6 +5620,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             className: 'rt-input', style: { width: '100%', marginBottom: 8, boxSizing: 'border-box' },
             placeholder: '过滤技能', value: q, onChange: (e) => setQ(e.target.value),
           }),
+          h('div', { style: { display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' } },
+            h('select', { className: 'rt-input', style: { flex: '1 1 110px', minWidth: 0 },
+              value: categoryFilter, 'aria-label': '按功能分类筛选',
+              onChange: (e) => setCategoryFilter(e.target.value) },
+              h('option', { value: 'all' }, '全部功能'),
+              categories.concat([{ id: 'other', label: '其他技能' }]).map((c) =>
+                h('option', { key: c.id, value: c.id }, c.label))),
+            h('select', { className: 'rt-input', style: { flex: '1 1 90px', minWidth: 0 },
+              value: sourceFilter, 'aria-label': '按技能来源筛选',
+              onChange: (e) => setSourceFilter(e.target.value) },
+              h('option', { value: 'all' }, '全部来源'),
+              h('option', { value: 'redteam' }, '内置红队'),
+              h('option', { value: 'aboutsecurity' }, 'AboutSecurity'),
+              h('option', { value: 'official' }, 'DSH 官方'))),
           h('label', { className: 'rt-kb-check', style: { display: 'flex', margin: '0 0 6px' } },
             h('input', { type: 'checkbox', checked: srcOnly, onChange: (e) => setSrcOnly(e.target.checked) }),
             '只看本插件自带（' + (meta.fromPlugin || 0) + ' 个）'),
@@ -5666,7 +5694,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             : null,
           meta.registryState && meta.registryState !== 'listed'
             ? h('div', { className: 'rt-hint', style: { marginBottom: 8 } },
-                '宿主注册尚未确认（' + meta.registryState + '）。以下是本地文件清单，不能当成 DSH 实际已加载的技能。')
+                meta.note || ('宿主注册未确认：' + meta.registryState + '。以下是本地文件清单。'))
             : null,
           detail
             ? h('div', { className: 'rt-pane' },
