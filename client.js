@@ -884,6 +884,17 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-flow-wire.is-on>i{animation:none;display:none}
 .dshp-flow-node.is-cur{transform:none}
 }
+.dshp-clean-browser{margin:8px 0 14px}
+.dshp-clean-tools{display:grid;gap:8px;margin:8px 0 12px}
+.dshp-clean-search{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dshp-mute)}
+.dshp-clean-search .dshp-field{flex:1;min-width:0;max-width:400px;padding:8px 10px}
+.dshp-clean-filters{display:flex;gap:6px;flex-wrap:wrap}
+.dshp-clean-filter{border:1px solid var(--dshp-line);background:var(--dshp-paper);color:var(--dshp-mute);border-radius:99px;padding:5px 10px;font-size:12px;cursor:pointer}
+.dshp-clean-filter.is-on{border-color:var(--dshp-accent);background:var(--dshp-accent-soft);color:var(--dshp-ink)}
+.dshp-clean-filter:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:2px}
+.dshp-clean-count{font-size:12px;color:var(--dshp-mute);flex:1}
+.dshp-clean-progress-note{padding:8px 10px;margin:0 0 12px;border-left:3px solid var(--dshp-accent);background:var(--dshp-fill);font-size:12px;overflow-wrap:anywhere}
+.dshp-clean-diagnostic{font:12px/1.6 var(--dshp-mono);white-space:pre-wrap;overflow:auto;max-height:280px;padding:12px;border:1px solid var(--dshp-line);border-radius:8px;background:var(--dshp-fill);color:var(--dshp-ink);user-select:text}
 .dshp-group{margin:0 0 8px;border-radius:8px;overflow:hidden}
 .dshp-group-h{width:100%;display:flex;align-items:center;gap:12px;padding:8px 12px;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
 .dshp-group-h:hover{background:var(--dshp-fill)}
@@ -1315,51 +1326,182 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return out;
 		}
 
+
+		function filterPatchRows(rows, mode, search) {
+			const needle = String(search || "").trim().toLowerCase();
+			return (rows || []).filter((r) => {
+				const status = r.st;
+				const applied = status === "applied" || status === "already";
+				const attention = status === "pending" || status === "unmatched";
+				if (mode === "attention" && !attention) return false;
+				if (mode === "applied" && !applied) return false;
+				if (mode === "skipped" && (applied || attention)) return false;
+				if ((mode === "pending" || mode === "unmatched") && status !== mode) return false;
+				if (!needle) return true;
+				const ids = (Array.isArray(r.ids) && r.ids.length ? r.ids : [r.id])
+					.map((id) => "#" + id + " " + id).join(" ");
+				return [ids, r.title, r.layer, status].join(" ").toLowerCase().includes(needle);
+			});
+		}
+
+		function formatPatchDiagnostics(state, rows, t) {
+			const tally = tallyPatches(rows);
+			const job = state.apply_progress || {};
+			const lines = [
+				"dsh-purge 清洗台诊断 / Cleaning diagnostics",
+				"插件版本: " + (state.plugin_version || "未知"),
+				"宿主类型: " + (state.surface || "未知"),
+				"宿主路径: " + (state.ai_base || "未定位"),
+				"DSH_HOME: " + (state.dsh_home || "未知"),
+				"补丁: " + tally.applied + "/" + tally.total
+					+ " 已应用; " + tally.pending + " 待应用; "
+					+ tally.unmatched + " 没对上; " + tally.skipped + " 跳过",
+				"shim: cmd=" + (state.shim_cmd || "未知")
+					+ ", ps1=" + (state.shim_ps1 || "未知")
+					+ ", unix=" + (state.shim_bin || "未知"),
+				"备份: " + (state.has_backup ? "有" : "无"),
+			];
+			if (job.stage && job.stage !== "idle") {
+				lines.push("最近流程: " + (job.kind || "apply") + " / " + job.stage);
+			}
+			if (job.detail) lines.push("流程详情: " + job.detail);
+			if (job.error) lines.push("流程错误: " + job.error);
+			lines.push("", "逐项补丁状态:");
+			for (const r of rows) {
+				lines.push(patchIdLabel(r) + " " + r.title + " | "
+					+ statusLabel(r.st, t) + " (" + r.st + ") | " + (r.layer || "未分组"));
+			}
+			return lines.join("\n");
+		}
+
 		function PatchGroups({ state }) {
 			const t = useT();
 			const [open, setOpen] = useState({});
+			const [mode, setMode] = useState("all");
+			const [search, setSearch] = useState("");
+			const [showDiagnostic, setShowDiagnostic] = useState(false);
+			const [copyNotice, setCopyNotice] = useState("");
 			if (!state || !state.patch_status) return h("div", { className: "dshp-skel", style: { height: 120 } });
-			const located = !!state.ai_base;
-			if (!located) return null;
-			const grouped = new Map();
-			for (const row of patchRowsOf(state)) {
+
+			const rows = patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) }));
+			const tally = tallyPatches(rows);
+			const selected = filterPatchRows(rows, mode, search);
+			const searching = mode !== "all" || search.trim() !== "";
+			const groups = new Map();
+			for (const row of selected) {
 				const key = layerGroupOf(row.layer);
-				if (!grouped.has(key)) grouped.set(key, []);
-				grouped.get(key).push(row);
+				if (!groups.has(key)) groups.set(key, []);
+				groups.get(key).push(row);
 			}
-			return GROUP_ORDER.filter((key) => grouped.has(key)).map((key) => {
-				const rows = grouped.get(key).slice().sort((a, b) => a.id - b.id);
-				if (!rows.length) return null;
-				const tally = tallyPatches(rows);
-				const notes = [];
-				if (tally.pending) notes.push(t("metric.pendingShort", { n: tally.pending }));
-				if (tally.unmatched) notes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
-				if (tally.skipped) notes.push(t("metric.skipShort", { n: tally.skipped }));
-				const expanded = !!open[key];
-				return h("div", { key: key, className: "dshp-group" },
-					h("button", {
-						type: "button",
-						className: "dshp-group-h",
-						"aria-expanded": expanded ? "true" : "false",
-						onClick: () => setOpen((prev) => Object.assign({}, prev, { [key]: !prev[key] })),
-					},
-						h("strong", null, t("group." + key)),
-						h("span", { className: "dshp-count" }, tally.applied + "/" + tally.total + (notes.length ? " · " + notes.join(" · ") : "")),
+			const groupTotals = new Map();
+			for (const row of rows) {
+				const key = layerGroupOf(row.layer);
+				groupTotals.set(key, (groupTotals.get(key) || 0) + 1);
+			}
+			const diagnostics = formatPatchDiagnostics(state, rows, t);
+			const filters = [
+				["all", "全部", tally.total],
+				["attention", "需关注", tally.pending + tally.unmatched],
+				["pending", "待应用", tally.pending],
+				["unmatched", "没对上", tally.unmatched],
+				["skipped", "跳过", tally.skipped],
+				["applied", "已应用", tally.applied],
+			];
+			const copyDiagnostics = async () => {
+				let copied = false;
+				try {
+					if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+						await navigator.clipboard.writeText(diagnostics);
+						copied = true;
+					}
+				} catch { /* Desktop 非安全上下文：尝试本地文本选择复制 */ }
+				if (!copied) {
+					let box = null;
+					try {
+						box = document.createElement("textarea");
+						box.value = diagnostics;
+						box.setAttribute("readonly", "");
+						box.style.position = "fixed";
+						box.style.left = "-9999px";
+						document.body.appendChild(box);
+						box.select();
+						copied = document.execCommand("copy") === true;
+					} catch { /* 保留可见诊断文本供手动复制 */ }
+					finally { if (box && box.parentNode) box.parentNode.removeChild(box); }
+				}
+				setCopyNotice(copied ? "诊断已复制（包含本机宿主路径）" : "复制失败；已展开诊断文本，请手动复制");
+				if (!copied) setShowDiagnostic(true);
+			};
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-clean-tools" },
+					h("label", { className: "dshp-clean-search" },
+						"查找补丁",
+						h("input", {
+							className: "dshp-field", type: "search",
+							placeholder: "编号、名称或分组", value: search,
+							onChange: (e) => setSearch(e.target.value),
+							"aria-label": "搜索补丁编号、名称或分组",
+						}),
 					),
-					expanded ? h("table", { className: "dshp-table" },
-						h("thead", null, h("tr", null,
-							h("th", null, "#"),
-							h("th", null, t("table.patch")),
-							h("th", null, t("table.status")),
-						)),
-						h("tbody", null, rows.map((r) => h("tr", { key: r.ids ? r.ids.join("-") : r.id },
-							h("td", { className: "dshp-id" }, patchIdLabel(r)),
-							h("td", null, patchTitle(t, state, r)),
-							h("td", null, h(Pill, { value: r.st })),
-						))),
-					) : null,
-				);
-			});
+					h("div", { className: "dshp-clean-filters", "aria-label": "按补丁状态筛选" },
+						filters.map(([value, label, count]) => h("button", {
+							key: value, type: "button",
+							className: "dshp-clean-filter" + (mode === value ? " is-on" : ""),
+							"aria-pressed": mode === value,
+							onClick: () => setMode(value),
+						}, label + " " + count)),
+					),
+					h("div", { className: "dshp-row" },
+						h("span", { className: "dshp-clean-count", role: "status" },
+							"显示 " + selected.length + " / " + rows.length + " 项；跳过不代表失败"),
+						h(Btn, { tiny: true, onClick: () => setShowDiagnostic((v) => !v) },
+							showDiagnostic ? "收起诊断" : "查看诊断"),
+						h(Btn, { tiny: true, onClick: copyDiagnostics }, "复制完整诊断"),
+					),
+					copyNotice ? h("p", { className: "dshp-hint", role: "status" }, copyNotice) : null,
+					showDiagnostic ? h("pre", {
+						className: "dshp-clean-diagnostic",
+						tabIndex: 0, "aria-label": "完整清洗诊断文本",
+					}, diagnostics) : null,
+				),
+				!state.ai_base
+					? h("p", { className: "dshp-hint" }, "尚未定位到宿主；诊断可复制，补丁列表等待宿主加载。")
+					: selected.length === 0
+						? h("p", { className: "dshp-hint", role: "status" }, "没有匹配的补丁；可清空搜索或切换到「全部」。")
+						: GROUP_ORDER.filter((key) => groups.has(key)).map((key) => {
+							const visible = groups.get(key).slice().sort((a, b) => a.id - b.id);
+							const local = tallyPatches(visible);
+							const notes = [];
+							if (local.pending) notes.push(t("metric.pendingShort", { n: local.pending }));
+							if (local.unmatched) notes.push(t("metric.unmatchedShort", { n: local.unmatched }));
+							if (local.skipped) notes.push(t("metric.skipShort", { n: local.skipped }));
+							const expanded = open[key] === undefined ? searching : !!open[key];
+							return h("div", { key: key, className: "dshp-group" },
+								h("button", {
+									type: "button", className: "dshp-group-h",
+									"aria-expanded": expanded ? "true" : "false",
+									onClick: () => setOpen((prev) => ({ ...prev, [key]: !expanded })),
+								},
+									h("strong", null, t("group." + key)),
+									h("span", { className: "dshp-count" },
+										visible.length + "/" + groupTotals.get(key)
+										+ (notes.length ? " · " + notes.join(" · ") : "")),
+								),
+								expanded ? h("table", { className: "dshp-table" },
+									h("thead", null, h("tr", null,
+										h("th", null, "#"),
+										h("th", null, t("table.patch")),
+										h("th", null, t("table.status")),
+									)),
+									h("tbody", null, visible.map((r) => h("tr", { key: r.ids ? r.ids.join("-") : r.id },
+										h("td", { className: "dshp-id" }, patchIdLabel(r)),
+										h("td", null, r.title),
+										h("td", null, h(Pill, { value: r.st })),
+									))),
+								) : null,
+							);
+						}),
+			);
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
@@ -2257,6 +2399,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					cleanGuideError ? h("div", { className: "dshp-notice is-error" }, cleanGuideError) : null,
 					h("pre", { className: "dshp-guide-doc" }, cleanGuideText || (cleanGuideError ? "" : "正在读取本地指南…"))) : null,
 				h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
+				job && (job.error || (job.active && job.detail)) ? h("p", {
+					className: "dshp-clean-progress-note",
+					role: job.error ? "alert" : "status",
+				}, job.error ? "清洗流程失败：" + job.error : job.detail) : null,
 				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
 				h(PatchGroups, { state: s }),
 				h(InjectSwitchSection),
