@@ -99,3 +99,32 @@ test('task context rejects ambiguous or unsafe focus target IDs', () => {
     db.close()
   }
 })
+
+
+test('asset task context automatically includes offline CVE candidates without modifying SQLite findings', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const original = getAsset(engagement, id)
+      if (!original) return original
+      return {
+        ...original,
+        ports: [{ port: 3000, proto: 'tcp', state: 'open', service: 'http', product: 'Grafana', version: '8.2.5' }],
+        fingerprints: [{ product: 'Grafana', version: '8.2.5' }],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    const hit = context.knowledge_candidates.find((row) => row.cve.includes('CVE-2021-43798'))
+    assert.ok(hit)
+    assert.equal(hit.verified, false)
+    assert.equal(hit.status, 'candidate')
+    assert.ok(hit.source_url.includes('FJNB5/fujiang-pojia'))
+    assert.equal(Array.isArray(context.related_skills), true)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+    assert.equal(JSON.stringify(context).includes('NEVER_EXPOSE'), false)
+  } finally {
+    db.close()
+  }
+})

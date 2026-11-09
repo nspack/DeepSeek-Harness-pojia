@@ -25,6 +25,8 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 查看**当前会话绑定的是哪个靶标**（会话 id、父会话、根会话、绑定链）。多会话同时开工时，先跑它确认自己没串到别人的靶标上。
 
 ### `redteam_task_context`
+对资产/关联漏洞任务卡，现在会一起返回最多 3 条公开 CVE 候选（`knowledge_candidates`）及本机已安装的相关技能摘要（`related_skills`）。它们复用 `redteam_cve_match`、`redteam_skill_search` 的只读索引，不修改数据库、不会因候选命中就确认漏洞，也不启动自动扫描。
+
 【只读】把 `redteam_next_action` 返回的 `focus.target` 或 `focus.task_key` 直接作为输入，一次读取核查目标的必要上下文，减少多次查库。
 
 参数：
