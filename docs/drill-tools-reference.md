@@ -132,6 +132,19 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 - `engagement`
 - `id` — 资产 id（来自 redteam_asset_query 结果）
 
+### `redteam_cve_match`
+【离线只读】按现有 SQLite 资产的服务、指纹、产品与端口，或直接输入 CVE / 产品名，查找随包公开漏洞候选索引。只返回候选与原始资料链接，**不执行 PoC、不联网、不写漏洞库、不自动确认成功**。同产品命中不代表版本确实受影响。
+
+参数：
+- `asset_id` — 可选；传 `redteam_asset_query` 的资产 id 后读取现有资产详情
+- `engagement` — 只有使用 `asset_id` 时才需要；可省略以继承会话绑定靶标
+- `cve` — 可选，精确匹配如 `CVE-2021-44228`
+- `product` / `banner` / `fingerprint` / `keyword` — 可选，附加产品、指纹或文字检索
+- `port` — 观察到的端口，仅作为匹配加分，不能单独产生漏洞候选
+- `limit` — 返回条数，默认 10，最多 30
+
+示例：先 `redteam_asset_query` 找到资产 id，再 `redteam_cve_match(asset_id=12)`；没有数据库也可以 `redteam_cve_match(product="Grafana", port=3000)`。用 `redteam_poc_search` 查本地已验证 PoC / Nuclei 模板；这两套检索互补，不会相互覆盖。
+
 ### `redteam_data_quality`
 只读核对资产库记录的完整性：区分候选漏洞缺证据与已确认/利用记录缺证据，统计 HTTP 请求/响应为空，以及漏洞、HTTP 证据、截图中的资产/漏洞孤立引用。只返回汇总数量，不返回原始证据或凭据，不迁移数据库，也不把记录完整当成漏洞已验证。
 

@@ -21,6 +21,7 @@
   "redteam_credential_add",
   "redteam_credential_check",
   "redteam_credential_list",
+  "redteam_cve_match",
   "redteam_data_quality",
   "redteam_delivery_audit",
   "redteam_domain_index",
