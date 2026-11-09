@@ -884,6 +884,13 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-flow-wire.is-on>i{animation:none;display:none}
 .dshp-flow-node.is-cur{transform:none}
 }
+.dshp-artex{margin:10px 0 14px;padding:12px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-paper)}
+.dshp-artex-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.dshp-artex-head strong{font-size:14px}
+.dshp-artex-note{font-size:12px;color:var(--dshp-mute);margin:8px 0}
+.dshp-artex-tools{margin:8px 0 0 18px;padding:0;font:12px/1.6 var(--dshp-mono);overflow-wrap:anywhere}
+.dshp-artex-tools li{margin-bottom:4px}
+.dshp-artex a{font-size:12px}
 .dshp-clean-browser{margin:8px 0 14px}
 .dshp-clean-tools{display:grid;gap:8px;margin:8px 0 12px}
 .dshp-clean-search{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dshp-mute)}
@@ -1570,6 +1577,58 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
+		function ArtexLinkSection() {
+			const [status, setStatus] = useState(null);
+			const [loading, setLoading] = useState(false);
+			const [error, setError] = useState("");
+			const reload = () => {
+				setLoading(true);
+				apiJson("/dsh-purge/artex")
+					.then((data) => {
+						if (!data || data.ok === false) throw new Error((data && data.error) || "状态读取失败");
+						setStatus(data);
+						setError("");
+					})
+					.catch((e) => setError(String((e && e.message) || e)))
+					.finally(() => setLoading(false));
+			};
+			useEffect(() => { reload(); }, []);
+			const tools = status && Array.isArray(status.tools) ? status.tools : [];
+			const reused = tools.filter((item) => item.reused).length;
+			return h("section", { className: "dshp-artex", "aria-label": "ARTEX 本机联动" },
+				h("div", { className: "dshp-artex-head" },
+					h("strong", null, "ARTEX 本机联动"),
+					h(Btn, { tiny: true, disabled: loading, onClick: reload }, loading ? "检测中…" : "重新检测 ARTEX"),
+				),
+				error ? h("p", { className: "dshp-hint", role: "alert" }, "ARTEX 检测失败：" + error) : null,
+				status ? h("div", null,
+					h("p", { className: "dshp-artex-note", role: "status" },
+						status.online ? "已连接本机 ARTEX" + (status.version ? " · " + status.version : "")
+							: "当前未发现运行中的 ARTEX 服务",
+						" · 已复用 " + reused + " 项 · ARTEX 本机工具 " + tools.length + " 项"),
+					status.online ? h("a", {
+						href: "http://127.0.0.1:8787/", target: "_blank", rel: "noopener noreferrer",
+					}, "打开 ARTEX") : null,
+					tools.length ? h("details", null,
+						h("summary", null, "查看 ARTEX 本机工具路径（" + tools.length + "）"),
+						h("ul", { className: "dshp-artex-tools" }, tools.map((item) =>
+							h("li", { key: item.id }, item.id + " · "
+								+ (item.reused ? "DSH 已复用" : "可用文件，DSH 优先使用其原有配置")
+								+ " · " + item.path))),
+					) : h("p", { className: "dshp-artex-note" }, "尚未找到 ARTEX 在本机管理的工具；如果只运行 Docker，容器内工具不会当作 Windows 可执行文件。"),
+					Array.isArray(status.toolRoots) && status.toolRoots.length
+						? h("details", null,
+							h("summary", null, "ARTEX 本机工具目录（" + status.toolRoots.length + "）"),
+							h("ul", { className: "dshp-artex-tools" },
+								status.toolRoots.map((dir) => h("li", { key: dir }, dir))),
+						) : null,
+					status.skillDir ? h("p", { className: "dshp-artex-note" }, "ARTEX Skill 目录（仅显示）： " + status.skillDir) : null,
+					h("p", { className: "dshp-artex-note" },
+						"仅读取本机健康状态与工具路径；不导入登录凭据，不复制配置，也不会启动或修改 ARTEX。"),
+				) : h("p", { className: "dshp-artex-note" }, loading ? "正在检测本机 ARTEX…" : "ARTEX 状态尚未加载"),
+			);
+		}
+
 		function InjectSwitchSection() {
 			const [off, setOff] = useState(null);
 			const [busy, setBusy] = useState(false);
@@ -2479,6 +2538,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				}, job.error ? "清洗流程失败：" + job.error : job.detail) : null,
 				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
 				h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: patchBusy || uninstallBusy }),
+				h(ArtexLinkSection),
 				h(InjectSwitchSection),
 				h(HooksDenySection, { onSaved: loadAll }),
 				h("div", { className: "dshp-row", style: { marginTop: 12 } },
