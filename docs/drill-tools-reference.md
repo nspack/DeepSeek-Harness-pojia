@@ -132,6 +132,20 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 - `engagement`
 - `id` — 资产 id（来自 redteam_asset_query 结果）
 
+### `redteam_skill_search`
+【离线只读】检索当前 purge 随包技能，以及按需下载到 `$DSH_HOME/redteam/external-skills/aboutsecurity/skills` 的 AboutSecurity 技能。不需要另外安装 `dsh-prompt-custom` 插件。
+
+参数：`query`（名称/主题/关键词；空值列出）、`limit`（默认 10，上限 50）。
+
+返回稳定 `key`、名称、描述与来源，另外用 `aboutsecurity_installed` 明确该外部技能库是否已找到。没有安装外部技能时仍能搜索内置技能。
+
+### `redteam_skill_read`
+【离线只读】根据上一步的 `key` 读取技能 Markdown 正文；不会执行技能里面的命令，也不允许任意文件路径读取。查询结果里的 `key` 是唯一入口。
+
+参数：`key`（必填，如 `aboutsecurity:recon/passive-recon` 或 `redteam:web-injection`）、`max_chars`（默认 16000）。
+
+AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRATION.md)。
+
 ### `redteam_cve_match`
 【离线只读】按现有 SQLite 资产的服务、指纹、产品与端口，或直接输入 CVE / 产品名，查找随包公开漏洞候选索引。只返回候选与原始资料链接，**不执行 PoC、不联网、不写漏洞库、不自动确认成功**。同产品命中不代表版本确实受影响。
 

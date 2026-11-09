@@ -60,6 +60,8 @@
   "redteam_shot_add",
   "redteam_shot_delete",
   "redteam_shot_list",
+  "redteam_skill_read",
+  "redteam_skill_search",
   "redteam_task_block",
   "redteam_task_context",
   "redteam_tunnel_add",
