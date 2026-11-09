@@ -16,9 +16,10 @@ try {
   }
 
   $version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\package.json') -Raw | ConvertFrom-Json).version
-  $manifest = '{"name":"dsh-profile-desktop","dependencies":{"dsh-purge":"pinned-old-source"}}'
+  $manifest = '{"name":"dsh-profile-desktop","dsh":{"profile":{"bundles":["dsh-purge"]}},"dependencies":{"dsh-purge":"pinned-old-source"}}'
   $originalPluginManifest = '{"version":"' + $version + '"}'
   Set-Content -LiteralPath (Join-Path $profile 'package.json') -Value $manifest -NoNewline
+  Set-Content -LiteralPath (Join-Path $profile 'cordis.patch.yml') -Value "- insert:`n    - id: dsh-purge" -NoNewline
   Set-Content -LiteralPath (Join-Path $profile 'pnpm-lock.yaml') -Value 'original-junction-lock' -NoNewline
   Set-Content -LiteralPath (Join-Path $plugin 'package.json') -Value $originalPluginManifest -NoNewline
   Set-Content -LiteralPath (Join-Path $plugin 'client.js') -Value 'old junction client' -NoNewline

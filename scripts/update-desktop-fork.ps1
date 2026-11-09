@@ -43,7 +43,23 @@ if ($CheckOnly) {
       throw "Installed package is incomplete: $file"
     }
   }
-  Write-Host "PASS: selected profile contains dsh-purge $version and required UI files."
+  # The package can exist without its Cordis profile entry (postinstall may have been skipped).
+  # This is read-only: do not silently modify the user's profile during -CheckOnly.
+  $profilePackage = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+  if (@($profilePackage.dsh.profile.bundles) -notcontains 'dsh-purge') {
+    throw 'Plugin files exist, but dsh.profile.bundles lacks dsh-purge. In the profile directory run: node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs'
+  }
+  $patchFile = Join-Path $profileDir 'cordis.patch.yml'
+  if (-not (Test-Path -LiteralPath $patchFile -PathType Leaf)) {
+    throw "Plugin files exist, but the profile insert file is missing: $patchFile. Run node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs"
+  }
+  $patchText = Get-Content -LiteralPath $patchFile -Raw
+  if ($patchText -notmatch '(?m)^\s*-\s*insert:\s*$' -or
+      $patchText -notmatch '(?m)^\s*-\s*(?:id:\s*dsh-purge(?:-main)?|name:\s*dsh-purge)\s*$') {
+    throw "Plugin files exist, but the dsh-purge insert is missing from $patchFile. Run node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs"
+  }
+  Write-Host "PASS: dsh-purge $version files, profile bundle and Cordis insert are present."
+  Write-Host "Note: a running DSH host must still be restarted to load the plugin."
   return
 }
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
