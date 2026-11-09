@@ -83,18 +83,20 @@ test('status separates live ARTEX from binary existence and never reports creden
   assert.equal(offline.toolCount, 1, 'installed tools remain reusable while service is stopped')
 })
 
-test('cleaning UI displays verified local ARTEX service and tool reuse without any auto-execute action', () => {
+test('ARTEX is mounted in the RedTeam Resources tab and uses the existing read-only bridge', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
   const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
-  assert.match(client, /function ArtexLinkSection\(\)/)
-  assert.match(client, /apiJson\("\/dsh-purge\/artex"\)/)
-  assert.match(client, /h\(ArtexLinkSection\)/)
-  assert.match(client, /DSH 已复用/)
+  assert.match(source, /function ArtexTab\(\)/)
+  assert.match(source, /\['artex', 'ARTEX'\]/)
+  assert.match(source, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab\)/)
+  assert.match(client, /function ArtexTab\(\)/)
+  assert.doesNotMatch(client, /function ArtexLinkSection\(\)/)
+  assert.match(client, /fetch\('\/dsh-purge\/artex', \{ method: 'GET' \}\)/)
   assert.match(server, /path: "\/dsh-purge\/artex"/)
   assert.match(server, /const state = await inspectArtex\(\)/)
   assert.match(server, /reused: resolveTool\(item\.id\)\.path === item\.path/)
 })
-
 
 test('local health distinguishes verified ARTEX from authenticated or unrelated services', async () => {
   const examples = [
@@ -162,10 +164,10 @@ test('tool files without a responding service are shown installed/offline, not c
   assert.equal(status.toolCount, 1)
 })
 
-test('cleaning UI renders ARTEX candidate and offline states separately from verified online', () => {
-  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /service_candidate: "本机 8787 有响应/)
-  assert.match(client, /installed_offline: "检测到 ARTEX 本机工具/)
-  assert.match(client, /status\.online \? h\("a"/)
-  assert.match(client, /文件尚未执行验证/)
+test('RedTeam ARTEX tab distinguishes unverified and offline service states', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  assert.match(source, /service_candidate: '8787 端口有响应/)
+  assert.match(source, /installed_offline: 'ARTEX 本机工具已发现/)
+  assert.match(source, /state && state\.online \? h\('a'/)
+  assert.match(source, /找到文件不代表可执行已验证/)
 })

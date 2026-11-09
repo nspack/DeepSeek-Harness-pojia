@@ -884,13 +884,6 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-flow-wire.is-on>i{animation:none;display:none}
 .dshp-flow-node.is-cur{transform:none}
 }
-.dshp-artex{margin:10px 0 14px;padding:12px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-paper)}
-.dshp-artex-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-.dshp-artex-head strong{font-size:14px}
-.dshp-artex-note{font-size:12px;color:var(--dshp-mute);margin:8px 0}
-.dshp-artex-tools{margin:8px 0 0 18px;padding:0;font:12px/1.6 var(--dshp-mono);overflow-wrap:anywhere}
-.dshp-artex-tools li{margin-bottom:4px}
-.dshp-artex a{font-size:12px}
 .dshp-clean-browser{margin:8px 0 14px}
 .dshp-clean-tools{display:grid;gap:8px;margin:8px 0 12px}
 .dshp-clean-search{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dshp-mute)}
@@ -1577,67 +1570,6 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
-		function ArtexLinkSection() {
-			const [status, setStatus] = useState(null);
-			const [loading, setLoading] = useState(false);
-			const [error, setError] = useState("");
-			const reload = () => {
-				setLoading(true);
-				apiJson("/dsh-purge/artex")
-					.then((data) => {
-						if (!data || data.ok === false) throw new Error((data && data.error) || "状态读取失败");
-						setStatus(data);
-						setError("");
-					})
-					.catch((e) => setError(String((e && e.message) || e)))
-					.finally(() => setLoading(false));
-			};
-			useEffect(() => { reload(); }, []);
-			const tools = status && Array.isArray(status.tools) ? status.tools : [];
-			const reused = tools.filter((item) => item.reused).length;
-			const stateText = {
-				detected: "已连接本机 ARTEX",
-				installed_offline: "检测到 ARTEX 本机工具，服务未运行",
-				service_candidate: "本机 8787 有响应，但尚未确认是 ARTEX",
-				degraded: "已识别 ARTEX，健康状态异常",
-				absent: "当前未检测到运行中的 ARTEX",
-			};
-			return h("section", { className: "dshp-artex", "aria-label": "ARTEX 本机联动" },
-				h("div", { className: "dshp-artex-head" },
-					h("strong", null, "ARTEX 本机联动"),
-					h(Btn, { tiny: true, disabled: loading, onClick: reload }, loading ? "检测中…" : "重新检测 ARTEX"),
-				),
-				error ? h("p", { className: "dshp-hint", role: "alert" }, "ARTEX 检测失败：" + error) : null,
-				status ? h("div", null,
-					h("p", { className: "dshp-artex-note", role: "status" },
-						stateText[status.state] || (status.online ? "已连接本机 ARTEX" : "ARTEX 状态未知"),
-						status.online && status.version ? " · " + status.version : "",
-						status.httpStatus ? " · HTTP " + status.httpStatus : "",
-						" · DSH 当前采用 " + reused + " 项 · ARTEX 文件 " + tools.length + " 项"),
-					status.note ? h("p", { className: "dshp-artex-note" }, status.note) : null,
-					status.online ? h("a", {
-						href: "http://127.0.0.1:8787/", target: "_blank", rel: "noopener noreferrer",
-					}, "打开 ARTEX") : null,
-					tools.length ? h("details", null,
-						h("summary", null, "查看 ARTEX 本机工具路径（" + tools.length + "）"),
-						h("ul", { className: "dshp-artex-tools" }, tools.map((item) =>
-							h("li", { key: item.id }, item.id + " · "
-								+ (item.reused ? "DSH 已复用路径（文件尚未执行验证）" : "找到文件（DSH 未采用，未验证可执行）")
-								+ " · " + item.path))),
-					) : h("p", { className: "dshp-artex-note" }, "尚未找到 ARTEX 在本机管理的工具；Docker 容器内的工具不等于 Windows 本机可执行文件。"),
-					Array.isArray(status.toolRoots) && status.toolRoots.length
-						? h("details", null,
-							h("summary", null, "ARTEX 本机工具目录（" + status.toolRoots.length + "）"),
-							h("ul", { className: "dshp-artex-tools" },
-								status.toolRoots.map((dir) => h("li", { key: dir }, dir))),
-						) : null,
-					status.skillDir ? h("p", { className: "dshp-artex-note" }, "ARTEX Skill 目录（仅显示）： " + status.skillDir) : null,
-					h("p", { className: "dshp-artex-note" },
-						"仅读取本机健康状态与工具路径；不导入登录凭据，不复制配置，也不会启动或修改 ARTEX。"),
-				) : h("p", { className: "dshp-artex-note" }, loading ? "正在检测本机 ARTEX…" : "ARTEX 状态尚未加载"),
-			);
-		}
-
 		function InjectSwitchSection() {
 			const [off, setOff] = useState(null);
 			const [busy, setBusy] = useState(false);
@@ -1908,6 +1840,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [channel, setChannel] = useState("stable");
 			const [pick, setPick] = useState({ stable: "", beta: "" });
 			const actionTicket = useRef(0);
+			const actionTerminal = useRef(false);
 			const overrideRef = useRef("");
 			const defaultOverrideRef = useRef("");
 			const promptSeededRef = useRef(false);
@@ -2133,7 +2066,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				const tick = () => {
 					apiJson("/dsh-purge/status")
 						.then((d) => {
-							if (stop || !d) return;
+							if (stop || !d || actionTerminal.current) return;
 							if (d.apply_progress) {
 								setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
 								return;
@@ -2162,6 +2095,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				const label = tr(actionKey);
 				const ticket = ++actionTicket.current;
 				const run = () => {
+					actionTerminal.current = false;
 					setPatchBusy(true);
 					setAskRestart(false);
 					setNotice({ kind: "idle", text: "" });
@@ -2182,11 +2116,22 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						.then((r) => r.json())
 						.then((d) => {
 							if (ticket !== actionTicket.current) return;
+							actionTerminal.current = true;
 							if (responseNeedsPrompt(d)) {
+								setState((prev) => Object.assign({}, prev || {}, {
+									apply_progress: { active: false, kind: "apply", stage: "idle", error: tr("need.prompt") },
+								}));
 								rejectNeedPrompt(tr);
 								return;
 							}
 							if (!d.ok) {
+								setState((prev) => Object.assign({}, prev || {}, {
+									apply_progress: {
+										...((prev && prev.apply_progress) || {}),
+										active: false,
+										error: String(d.error || "宿主拒绝该操作"),
+									},
+								}));
 								setNotice({ kind: "error", text: tr("err.action", { action: label, error: d.error || "" }) });
 								return;
 							}
@@ -2250,6 +2195,14 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						})
 						.catch((e) => {
 							if (ticket !== actionTicket.current) return;
+							actionTerminal.current = true;
+							setState((prev) => Object.assign({}, prev || {}, {
+								apply_progress: {
+									...((prev && prev.apply_progress) || {}),
+									active: false,
+									error: "无法确认操作结果：" + String((e && e.message) || e) + "。请重新读取宿主状态。",
+								},
+							}));
 							setNotice({ kind: "error", text: tr("err.action", { action: label, error: e.message }) });
 						})
 						.finally(() => {
@@ -2369,6 +2322,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			}, []);
 
 			const doUninstall = useCallback(() => {
+				actionTerminal.current = false;
 				setUninstallBusy(true);
 				setAskUninstall(false);
 				setAskRestart(false);
@@ -2380,6 +2334,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				apiJson("/dsh-purge/uninstall", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
 					.then((d) => {
 						if (!d || !d.ok) throw new Error((d && d.error) || "uninstall failed");
+						actionTerminal.current = true;
 						setNotice({ kind: "ok", text: (d && d.note) || hostText(tr, "uninstall.done", d.surface || hostSurfaceOf(state)) });
 						if ((d && d.surface) === "desktop" || (d && d.fullApp) || hostSurfaceOf(state) === "desktop") return;
 						waitHostAfterUninstall(tr);
@@ -2410,9 +2365,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const jobOn = Boolean(patchBusy || uninstallBusy || (job && job.active));
 			const jobSteps = FLOW_STEPS[(job && job.kind) || "apply"] || FLOW_STEPS.apply;
 			const jobIdx = jobSteps.indexOf(job && job.stage === "restart" ? "done" : ((job && job.stage) || "idle"));
-			const pct = jobOn
+			// The bar tracks the operation, not the ratio of applied patches.
+			const flowFinished = Boolean(job && job.stage === "done" && !job.error && !job.active);
+			const pct = flowFinished ? 100 : jobOn
 				? Math.round(((job && job.stage === "done" ? jobSteps.length : Math.max(jobIdx, 0) + 0.45) / jobSteps.length) * 100)
-				: (located && total ? Math.round((applied / total) * 100) : 0);
+				: 0;
+			const flowInterrupted = Boolean(job && !job.active && job.stage !== "idle" && job.stage !== "done");
 			const metricNotes = [];
 			if (tally.pending) metricNotes.push(t("metric.pendingShort", { n: tally.pending }));
 			if (tally.unmatched) metricNotes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
@@ -2545,9 +2503,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					className: "dshp-clean-progress-note",
 					role: job.error ? "alert" : "status",
 				}, job.error ? "清洗流程失败：" + job.error : job.detail) : null,
-				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
+				flowInterrupted ? h("p", { className: "dshp-clean-progress-note", role: "alert" },
+					"上一次操作没有返回完成状态（最后阶段：" + flowLabel(job.stage, t) + "）。请重新检测并查看错误信息，不要把补丁比例当作流程完成。") : null,
+				h("div", { className: "dshp-clean-progress-note", role: "status" },
+					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : "未执行")
+					+ " · 补丁已应用 " + applied + "/" + total
+					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped),
+				h("div", { className: "dshp-bar", role: "progressbar", "aria-label": "清洗流程进度", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": pct },
+					h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
 				h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: patchBusy || uninstallBusy }),
-				h(ArtexLinkSection),
 				h(InjectSwitchSection),
 				h(HooksDenySection, { onSaved: loadAll }),
 				h("div", { className: "dshp-row", style: { marginTop: 12 } },
@@ -4706,7 +4670,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 /* Ops 工作区：统一导航、重点数据与窄屏布局（沿用宿主主题变量） */
 .rt-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;gap:12px;min-height:48px;align-items:stretch}
 .rt-tab-group{display:flex;align-items:center;gap:3px;flex:none}
-.rt-tab-group-title{font-size:10px;color:var(--rt-mute);padding:0 6px;white-space:nowrap;letter-spacing:.06em}
+.rt-tab-group-title{font-size:11px;color:var(--rt-mute);padding:8px 6px;white-space:nowrap;letter-spacing:.06em;appearance:none;background:none;border:0;cursor:pointer;font-family:inherit}
+.rt-tab-group-title:hover,.rt-tab-group-title:focus-visible{color:var(--rt-accent);background:var(--rt-fill);border-radius:6px}
+.rt-tab-group-title:focus-visible{outline:2px solid var(--rt-accent);outline-offset:-2px}
 .rt-tab{appearance:none;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;white-space:nowrap;flex:none;min-height:42px;font:inherit;font-size:12px;padding:8px 10px}
 .rt-tab.on{border-bottom-color:var(--rt-accent);background:var(--rt-fill)}
 .rt-tab:focus-visible{outline:2px solid var(--rt-accent);outline-offset:-3px}
@@ -8533,6 +8499,73 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : null)
     }
 
+    /* ---------------------------------------------------------- ARTEX 本机工具联动（全局资源页） */
+    function ArtexTab() {
+      const [state, setState] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const refresh = () => {
+        setBusy(true)
+        fetch('/dsh-purge/artex', { method: 'GET' })
+          .then((res) => res.json())
+          .then((data) => {
+            if (!data || data.ok === false) throw new Error((data && data.error) || 'ARTEX 状态不可用')
+            setState(data)
+            setError('')
+          })
+          .catch((err) => setError(String((err && err.message) || err)))
+          .finally(() => setBusy(false))
+      }
+      React.useEffect(() => { refresh() }, [])
+      const titles = {
+        detected: 'ARTEX 本机服务已确认',
+        degraded: '已识别 ARTEX，但健康状态异常',
+        service_candidate: '8787 端口有响应，尚未确认是 ARTEX',
+        installed_offline: 'ARTEX 本机工具已发现，服务未运行',
+        absent: '当前未发现运行中的 ARTEX 服务',
+      }
+      const tools = state && Array.isArray(state.tools) ? state.tools : []
+      const reused = tools.filter((x) => x.reused).length
+      return h('div', { className: 'rt-pane' },
+        h('div', { className: 'rt-card' },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
+            h('h4', { style: { margin: 0 } }, 'ARTEX 本机联动'),
+            h('button', { type: 'button', className: 'rt-btn', disabled: busy, onClick: refresh },
+              busy ? '正在检测…' : '重新检测'),
+            state && state.online ? h('a', {
+              href: 'http://127.0.0.1:8787/', target: '_blank', rel: 'noopener noreferrer',
+              className: 'rt-btn',
+            }, '打开 ARTEX') : null),
+          error ? h('p', { className: 'rt-err', role: 'alert' }, error) : null,
+          state ? h('div', null,
+            h('p', { className: 'rt-hint', role: 'status' },
+              (titles[state.state] || (state.online ? titles.detected : 'ARTEX 状态未知'))
+              + (state.version ? ' · ' + state.version : '')
+              + (state.httpStatus ? ' · HTTP ' + state.httpStatus : '')),
+            state.note ? h('p', { className: 'rt-foot' }, state.note) : null,
+            h('p', { className: 'rt-foot' },
+              '已发现 ' + tools.length + ' 个本机工具文件，其中 DSH 当前采用 ' + reused + ' 个路径；找到文件不代表可执行已验证。'),
+            tools.length ? h('div', { className: 'rt-card' },
+              h('h4', null, '共享工具与路径'),
+              tools.map((tool) => h('div', { key: tool.id, className: 'rt-kv' },
+                h('b', null, tool.id),
+                h('span', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
+                  (tool.reused ? 'DSH 已采用 · ' : '未被 DSH 采用 · ') + tool.path)))
+            ) : h('p', { className: 'rt-foot' }, '未找到可复用的 ARTEX 本机工具文件。'),
+            Array.isArray(state.toolRoots) && state.toolRoots.length
+              ? h('details', null,
+                  h('summary', null, '已发现的 ARTEX 工具目录'),
+                  state.toolRoots.map((dir) => h('div', { className: 'rt-mono', key: dir }, dir)))
+              : null,
+            state.skillDir ? h('div', { className: 'rt-kv' },
+              h('b', null, 'ARTEX Skill 目录（只读）'), h('span', null, state.skillDir)) : null,
+          ) : h('p', { className: 'rt-foot' }, busy ? '正在查询 ARTEX…' : '尚未读取 ARTEX 状态'),
+          h('p', { className: 'rt-foot' },
+            '工具查找沿用 DSH 原有配置优先级。不会读取 ARTEX 密钥或任务，不会启动服务、复制 Skills 或执行工具。'),
+        ),
+      )
+    }
+
     /* ---------------------------------------------------------- 常驻面板主体 */
     /**
      * 「未读」状态：按靶标记在 localStorage 里，每 25 秒问一次 host 的 consoleDigest
@@ -8804,7 +8837,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['overview', '概览'], ['assets', '资产'], ['findings', '漏洞'],
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
-        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报']] },
+        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['artex', 'ARTEX']] },
         { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
@@ -8834,12 +8867,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
       else if (st.tab === 'env' || st.tab === 'knowledge') body = h(EnvTab, { refreshKey: refreshKey })
        else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
+      else if (st.tab === 'artex') body = h(ArtexTab)
       else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng, onRestored: (id) => { api({ op: 'activateEngagement', engagement: id }).finally(() => refreshList(id)) } })
       else if (!eng) {
         body = h('div', { className: 'rt-pane' },
           h('div', { className: 'rt-card' },
-            h('h4', null, '还没有靶标'),
+            h('h4', null, '当前页面：' + ((tabs.find((item) => item[0] === st.tab) || [null, '概览'])[1]) + ' · 尚未选择靶标'),
             h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
               '输入攻防演练靶标单位名称，创建演练并开始资产测绘。'),
             h('div', { style: { display: 'flex', gap: 8 } },
@@ -8915,7 +8949,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         /* 原生按钮提供键盘与读屏语义；方向键 / Home / End 在页签间移动。 */
         h('div', { className: 'rt-tabs', role: 'tablist', 'aria-label': '作战台页面' },
           tabSections.map((section) => h('div', { className: 'rt-tab-group', key: section.label },
-            h('span', { className: 'rt-tab-group-title', 'aria-hidden': 'true' }, section.label),
+            h('button', {
+              type: 'button', className: 'rt-tab-group-title',
+              title: '打开' + section.label + '首页',
+              onClick: () => {
+                const page = section.pages[0][0]
+                markTabSeen(page)
+                setUI({ tab: page })
+                setRefreshKey((k) => k + 1)
+              },
+            }, section.label),
             section.pages.map((t) => {
               const activate = (tab) => {
                 markTabSeen(tab)
