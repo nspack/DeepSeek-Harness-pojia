@@ -799,6 +799,19 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 以下工具已在 `lib/redteam/tools.js` 注册，此处补全此前遗漏的说明。
 
+### `redteam_scan_run`
+
+【主动测试执行与留证】针对单个已获授权的目标执行 Nmap 或 ProjectDiscovery httpx，原始输出与执行参数保存到当前工作区的 `scan-output/`。命令、时间、输出哈希和解析摘要同步记录；成功后复用现有 `redteam_ingest` 将真实发现批量落库并关联扫描记录。失败或空输出不入库，不把扫描结果冒充已确认漏洞。
+
+参数：
+- `kind` — 必填：`nmap` 或 `httpx`。
+- `target` — 必填：单个 IP、域名或 HTTP(S) URL。
+- `engagement` — 可选：缺省使用会话已绑定的项目。
+- `ports` — Nmap 可选端口，例如 `80,443`。
+- `commit` — 默认 `true`：导入资产/端口；`false` 仅预览但仍保留文件。
+
+工具在本机直接执行固定命令参数，无 shell 拼接，不进行漏洞利用。
+
 ### `redteam_ingest`
 批量解析本地扫描文件，支持 nuclei、httpx、nmap、ffuf。默认只预览计数；只有 `commit: true` 才写入资产或漏洞。ffuf 仅返回路径，不会写库。
 
