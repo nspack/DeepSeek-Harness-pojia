@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listScanHistory, inspectScanArtifact } from '../lib/redteam/scan-history.js'
+import { listScanHistory, inspectScanArtifact, recordScanImport } from '../lib/redteam/scan-history.js'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'redteam-scan-history-'))
@@ -100,4 +100,61 @@ test('scan history is exposed in workbench navigation and model tool list', asyn
     assert.match(code, /\['scan-history', '扫描记录'\]/)
   }
   assert.match(tool, /name: 'redteam_scan_history'/)
+})
+
+test('scan history feedback always considers unfiltered outcomes, even when display is filtered', (t) => {
+  const { store, write } = fixture(t)
+  write('alpha', ONE, 'nmap', 'imported', '<nmaprun/>', { assets: 2 })
+  write('alpha', TWO, 'httpx', 'previewed', '{"url":"https://example.org"}')
+  const view = listScanHistory(store, 'alpha', { status: 'imported', limit: 1 })
+  assert.equal(view.total, 1)
+  assert.equal(view.feedback.total_scans, 2)
+  assert.equal(view.feedback.pending_review, 1)
+  assert.equal(view.feedback.recommendation.status, 'previewed')
+  assert.equal(listScanHistory(store, 'beta').feedback.total_scans, 0)
+})
+
+test('manual import resolves preview feedback only when the managed output is unchanged', (t) => {
+  const { store, write, root } = fixture(t)
+  write('alpha', ONE, 'nmap', 'previewed', '<nmaprun/>')
+  const file = join(root, 'alpha', 'scan-output', ONE + '.xml')
+  assert.equal(listScanHistory(store, 'alpha').feedback.pending_review, 1)
+  const updated = recordScanImport(store, 'alpha', file, {
+    ok: true, dry_run: false, kind: 'nmap', assets: 2, ports: 4, vulns: 0,
+    imported: { scan_run_id: 27 },
+  })
+  assert.equal(updated.updated, true)
+  assert.equal(updated.status, 'imported')
+  const result = listScanHistory(store, 'alpha')
+  assert.equal(result.feedback.pending_review, 0)
+  assert.equal(result.items[0].status, 'imported')
+  assert.equal(result.items[0].scan_run_id, 27)
+  assert.equal(Object.hasOwn(result.feedback, 'recent_by_target'), false)
+  const withTargets = listScanHistory(store, 'alpha', { includeTargets: true })
+  assert.equal(withTargets.feedback.recent_by_target.length, 1)
+
+  write('alpha', TWO, 'httpx', 'previewed', '{"url":"https://example.org"}')
+  const modified = join(root, 'alpha', 'scan-output', TWO + '.jsonl')
+  writeFileSync(modified, 'changed-after-scan')
+  const stale = recordScanImport(store, 'alpha', modified, {
+    ok: true, dry_run: false, kind: 'httpx', assets: 1, ports: 1,
+  })
+  assert.equal(stale.updated, false)
+  assert.equal(stale.reason, 'output-changed')
+  assert.equal(listScanHistory(store, 'alpha').feedback.pending_review, 1)
+})
+
+test('manual import cannot rewrite a record belonging to another project', (t) => {
+  const { store, write, root } = fixture(t)
+  write('alpha', ONE, 'nmap', 'previewed', '<nmaprun/>')
+  const file = join(root, 'alpha', 'scan-output', ONE + '.xml')
+  const wrong = recordScanImport(store, 'beta', file, {
+    ok: true, dry_run: false, kind: 'nmap', assets: 1, ports: 1,
+  })
+  assert.equal(wrong.updated, false)
+  const format = recordScanImport(store, 'alpha', file, {
+    ok: true, dry_run: false, kind: 'httpx', assets: 1, ports: 1,
+  })
+  assert.equal(format.updated, false)
+  assert.equal(listScanHistory(store, 'alpha').items[0].status, 'previewed')
 })

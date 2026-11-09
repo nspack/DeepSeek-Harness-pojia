@@ -112,6 +112,9 @@ test('taskBrief shows factual active and blocked notes alongside evidence gaps',
     planningSnapshot: RedteamStore.prototype.planningSnapshot,
     testStats: RedteamStore.prototype.testStats,
     taskBrief: RedteamStore.prototype.taskBrief,
+    // taskBrief now also consults the current project's (empty in this fixture) scan history.
+    listEngagements: () => [{ id: 'lab' }],
+    dirOf: () => process.cwd() + '/__planning_fixture_without_scan_runs__',
   }
   try {
     db.prepare("UPDATE asset SET test_status='testing', test_notes=?, test_updated_at=? WHERE id=4")

@@ -801,13 +801,15 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 ### `redteam_scan_history`
 
-【只读扫描历史与原始文件校验】查看当前项目按时间排序的扫描记录：工具、目标、运行状态、原始输出路径、摘要、导入数量及下一个建议检查动作。数据直接来自上一次 `redteam_scan_run` 保存的 manifest 文件，不额外生成数据库。
+【只读扫描历史、下一步反馈与原始文件校验】查看当前项目按时间排序的扫描记录：工具、目标、运行状态、原始输出路径、摘要、导入数量及下一个建议检查动作。数据直接来自上一次 `redteam_scan_run` 保存的 manifest 文件，不额外生成数据库。
 
 参数：
 - `engagement` — 可选，默认会话绑定的项目
 - `status` — 可选，筛选 `imported`、`no-findings`、`previewed`、`failed`、`timeout`、`import-failed` 等状态
 - `limit` / `offset` — 分页
 - `run_id` — 可选；指定时重新核对原始输出的大小与 SHA-256，返回 `verified` / `changed` / `missing`；不扫描目标，不代表扫描结果真实有效
+
+列表同时返回 `feedback`：按同工具、完全相同目标汇总最新状态与重复次数。失败、预览、导入失败、空输出会提示先复核旧记录，不自动重试或禁用工具；成功的后续记录会覆盖同目标的旧失败提示。`redteam_next_action` 和概览页复用这些建议，同时保留漏洞/资产原有优先级。
 
 ### `redteam_scan_run`
 
