@@ -80,3 +80,24 @@ test('cleaning UI provides interactive filters, real error details and accessibl
   assert.match(client, /复制失败；已展开诊断文本/)
   assert.match(client, /跳过不代表失败/)
 })
+
+
+test('grouped patch diagnostics disclose each underlying ID when rollout state is mixed', () => {
+  const grouped = [{ id: 2, ids: [2, 12], st: 'applied', layer: 'Prompt', title: 'Prompt Compose' }]
+  const state = {
+    ai_base: 'D:\\DSH',
+    patch_status: { 2: 'applied', 12: 'missing_file' },
+  }
+  const report = formatPatchDiagnostics(state, grouped, (s) => s)
+  assert.match(report, /#2\/#12 Prompt Compose \| applied/)
+  assert.match(report, /子补丁：#2 applied \(applied\)；#12 missing_file \(missing_file\)/)
+  assert.match(client, /dshp-clean-member-states/)
+  assert.match(client, /new Set\(r\.ids\.map\(\(id\) => state\.patch_status\[id\]/)
+})
+
+test('single-ID patches do not add redundant child-state lines', () => {
+  const report = formatPatchDiagnostics({
+    patch_status: { 7: 'pending' },
+  }, [{ id: 7, ids: [7], st: 'pending', layer: 'Code', title: 'Entry' }], (s) => s)
+  assert.ok(!report.includes('子补丁：'))
+})

@@ -892,6 +892,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-clean-filter{border:1px solid var(--dshp-line);background:var(--dshp-paper);color:var(--dshp-mute);border-radius:99px;padding:5px 10px;font-size:12px;cursor:pointer}
 .dshp-clean-filter.is-on{border-color:var(--dshp-accent);background:var(--dshp-accent-soft);color:var(--dshp-ink)}
 .dshp-clean-filter:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:2px}
+.dshp-clean-member-states{font-size:11px;line-height:16px;color:var(--dshp-mute);overflow-wrap:anywhere;margin-top:4px}
 .dshp-clean-count{font-size:12px;color:var(--dshp-mute);flex:1}
 .dshp-clean-progress-note{padding:8px 10px;margin:0 0 12px;border-left:3px solid var(--dshp-accent);background:var(--dshp-fill);font-size:12px;overflow-wrap:anywhere}
 .dshp-clean-diagnostic{font:12px/1.6 var(--dshp-mono);white-space:pre-wrap;overflow:auto;max-height:280px;padding:12px;border:1px solid var(--dshp-line);border-radius:8px;background:var(--dshp-fill);color:var(--dshp-ink);user-select:text}
@@ -1370,6 +1371,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			for (const r of rows) {
 				lines.push(patchIdLabel(r) + " " + r.title + " | "
 					+ statusLabel(r.st, t) + " (" + r.st + ") | " + (r.layer || "未分组"));
+				if (Array.isArray(r.ids) && r.ids.length > 1 && state.patch_status) {
+					lines.push("  子补丁：" + r.ids.map((id) => {
+						const raw = state.patch_status[id] || "未知";
+						return "#" + id + " " + statusLabel(raw, t) + " (" + raw + ")";
+					}).join("；"));
+				}
 			}
 			return lines.join("\n");
 		}
@@ -1495,7 +1502,14 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 									)),
 									h("tbody", null, visible.map((r) => h("tr", { key: r.ids ? r.ids.join("-") : r.id },
 										h("td", { className: "dshp-id" }, patchIdLabel(r)),
-										h("td", null, r.title),
+										h("td", null,
+											r.title,
+											Array.isArray(r.ids) && r.ids.length > 1 && state.patch_status
+												&& new Set(r.ids.map((id) => state.patch_status[id] || "未知")).size > 1
+												? h("div", { className: "dshp-clean-member-states" },
+													r.ids.map((id) => "#" + id + " " + statusLabel(state.patch_status[id] || "未知", t)).join(" · "))
+												: null,
+										),
 										h("td", null, h(Pill, { value: r.st })),
 									))),
 								) : null,
