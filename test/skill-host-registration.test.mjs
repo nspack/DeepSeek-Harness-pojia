@@ -7,6 +7,7 @@ const inventory = () => ({
   items: [
     { name: 'active-scan', library: 'redteam', availability: 'available' },
     { name: 'office-doc', library: 'official', availability: 'listed' },
+    { name: 'recon/passive-recon', library: 'aboutsecurity', availability: 'available' },
   ],
 })
 
@@ -19,6 +20,7 @@ test('local fallback preserves readability but does not claim native registratio
   assert.equal(result.items[0].hostListed, false)
   assert.equal(original.items[0].hostListed, undefined)
   assert.equal(result.items[1].hostListed, undefined)
+  assert.equal(result.items[2].hostListed, false)
   assert.match(result.note, /宿主/)
 })
 
@@ -36,6 +38,7 @@ test('native scoped skill listing marks only redteam entries as host-listed', ()
   assert.equal(result.hostListedCount, 1)
   assert.equal(result.items[0].hostListed, true)
   assert.equal(result.items[1].hostListed, undefined)
+  assert.equal(result.items[2].hostListed, false, 'external skill is readable but not native registered')
   assert.equal(result.items[0].availability, 'available')
 })
 
