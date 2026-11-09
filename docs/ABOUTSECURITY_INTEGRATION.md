@@ -2,6 +2,17 @@
 
 来源：[wgpsec/AboutSecurity](https://github.com/wgpsec/AboutSecurity)。本维护分支**不重新分发上游技能正文**，也不默认安装上游。上游仓库检查时没有根目录 LICENSE 文件；使用、再分发应先核对上游权利声明。
 
+## 作战台图形界面（本轮新增）
+
+在 **dsh-purge → 作战台 → 管理 → 技能库** 中，可以直接查看 **AboutSecurity 扩展技能库**：
+
+- **从上游安装**：显式点击后，通过本机 Git 稀疏检出 `wgpsec/AboutSecurity` 的 `skills/`，只安装到当前 `DSH_HOME`；插件启动时不会自动下载。
+- **更新技能**：已有 Git 安装目录时按需执行快进更新；安装/更新进度会在页面显示，完成后刷新技能目录。
+- **检查状态**：显示是否安装及本机可检索技能数量。
+- **浏览正文**：左侧列表有独立的 AboutSecurity 分类，选择条目可以查看 Markdown；“未列入宿主”仍表示尚未经过 DSH 原生 Provider 注册，不影响模型通过 `redteam_skill_search` / `redteam_skill_read` 读取。
+
+需要 Git 可执行程序在运行 DSH 的那台 Windows/Linux 设备的 PATH 里；若缺少 Git，页面会给出明确错误，不影响已有功能。
+
 ## 一次安装
 
 在当前 `dsh-purge` 仓库根目录或其完整安装包目录运行（需能访问 GitHub，且本机有 Git）：
@@ -39,6 +50,9 @@ node scripts/install-aboutsecurity.mjs --update
 无外部安装时仍可检索 `redteam:web-injection` 等 purge 自带技能。上述两个模型工具只读本地，技能正文不会在搜索阶段整篇塞进上下文，只有实际读取时才会返回。
 
 ## 兼容边界
+
+- 下载进程在宿主后台执行并由界面轮询状态；不影响其他技能显示。用户明确点击才会发起 Git 网络请求。
+
 
 - 目前是**模型工具级别的技能检索和读取**，不等同于已通过 DSH 官方 `skills.registerProvider` 注册或经过端到端模型调用验收。
 - REA 的既有集成原样保留。AboutSecurity 与 REA 是不同来源，不会因安装其中一个而覆盖另一个。
