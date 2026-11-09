@@ -896,6 +896,9 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-clean-count{font-size:12px;color:var(--dshp-mute);flex:1}
 .dshp-clean-progress-note{padding:8px 10px;margin:0 0 12px;border-left:3px solid var(--dshp-accent);background:var(--dshp-fill);font-size:12px;overflow-wrap:anywhere}
 .dshp-clean-diagnostic{font:12px/1.6 var(--dshp-mono);white-space:pre-wrap;overflow:auto;max-height:280px;padding:12px;border:1px solid var(--dshp-line);border-radius:8px;background:var(--dshp-fill);color:var(--dshp-ink);user-select:text}
+.dshp-clean-refresh{font-size:12px;padding:8px 10px;border-radius:8px;background:var(--dshp-fill);color:var(--dshp-ink);overflow-wrap:anywhere}
+.dshp-clean-refresh summary{cursor:pointer}
+.dshp-clean-refresh ul{margin:6px 0 0 18px;padding:0;max-height:180px;overflow:auto}
 .dshp-group{margin:0 0 8px;border-radius:8px;overflow:hidden}
 .dshp-group-h{width:100%;display:flex;align-items:center;gap:12px;padding:8px 12px;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
 .dshp-group-h:hover{background:var(--dshp-fill)}
@@ -1345,6 +1348,24 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			});
 		}
 
+		function patchStatusChanges(before, after) {
+			const prior = new Map((before || []).map((r) => [String(r.id), r]));
+			const seen = new Set();
+			const changes = [];
+			for (const row of after || []) {
+				const id = String(row.id);
+				seen.add(id);
+				const old = prior.get(id);
+				if (old && old.st === row.st) continue;
+				changes.push({ id: patchIdLabel(row), title: row.title || (old && old.title) || id, before: old ? old.st : "未列出", after: row.st });
+			}
+			for (const row of before || []) {
+				if (seen.has(String(row.id))) continue;
+				changes.push({ id: patchIdLabel(row), title: row.title || String(row.id), before: row.st, after: "未列出" });
+			}
+			return changes;
+		}
+
 		function formatPatchDiagnostics(state, rows, t) {
 			const tally = tallyPatches(rows);
 			const job = state.apply_progress || {};
@@ -1362,6 +1383,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					+ ", unix=" + (state.shim_bin || "未知"),
 				"备份: " + (state.has_backup ? "有" : "无"),
 			];
+			if (!state.ai_base && state.missing_ai_base) lines.push("宿主定位说明: " + state.missing_ai_base);
+			if (state.desktop_exe) lines.push("桌面程序: " + state.desktop_exe);
+			if (state.asar_still_sealed) lines.push("桌面运行时: app.asar 仍封装，当前进程可能无法读取解包目录中的补丁");
 			if (job.stage && job.stage !== "idle") {
 				lines.push("最近流程: " + (job.kind || "apply") + " / " + job.stage);
 			}
@@ -1381,13 +1405,16 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return lines.join("\n");
 		}
 
-		function PatchGroups({ state }) {
+		function PatchGroups({ state, onRefresh, busy }) {
 			const t = useT();
 			const [open, setOpen] = useState({});
 			const [mode, setMode] = useState("all");
 			const [search, setSearch] = useState("");
 			const [showDiagnostic, setShowDiagnostic] = useState(false);
 			const [copyNotice, setCopyNotice] = useState("");
+			const [shownDiagnostics, setShownDiagnostics] = useState(null);
+			const [refreshBusy, setRefreshBusy] = useState(false);
+			const [refreshReport, setRefreshReport] = useState(null);
 			if (!state || !state.patch_status) return h("div", { className: "dshp-skel", style: { height: 120 } });
 
 			const rows = patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) }));
@@ -1406,6 +1433,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				groupTotals.set(key, (groupTotals.get(key) || 0) + 1);
 			}
 			const diagnostics = formatPatchDiagnostics(state, rows, t);
+			const filteredDiagnostics = "当前筛选: " + mode + (search.trim() ? " / " + search.trim() : "") + "\n" + "显示 " + selected.length + " / " + rows.length + " 项\n\n" + formatPatchDiagnostics(state, selected, t);
 			const filters = [
 				["all", "全部", tally.total],
 				["attention", "需关注", tally.pending + tally.unmatched],
@@ -1414,11 +1442,23 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				["skipped", "跳过", tally.skipped],
 				["applied", "已应用", tally.applied],
 			];
-			const copyDiagnostics = async () => {
+			const refreshPatches = async () => {
+				if (refreshBusy || busy || typeof onRefresh !== "function") return;
+				setRefreshBusy(true);
+				setRefreshReport(null);
+				try {
+					const next = await onRefresh();
+					const updated = patchRowsOf(next).map((r) => ({ ...r, title: patchTitle(t, next, r) }));
+					setRefreshReport({ changes: patchStatusChanges(rows, updated) });
+				} catch (error) {
+					setRefreshReport({ error: String((error && error.message) || error || "读取失败") });
+				} finally { setRefreshBusy(false); }
+			};
+			const copyDiagnostics = async (text, scope) => {
 				let copied = false;
 				try {
 					if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-						await navigator.clipboard.writeText(diagnostics);
+						await navigator.clipboard.writeText(text);
 						copied = true;
 					}
 				} catch { /* Desktop 非安全上下文：尝试本地文本选择复制 */ }
@@ -1426,7 +1466,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					let box = null;
 					try {
 						box = document.createElement("textarea");
-						box.value = diagnostics;
+						box.value = text;
 						box.setAttribute("readonly", "");
 						box.style.position = "fixed";
 						box.style.left = "-9999px";
@@ -1436,8 +1476,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					} catch { /* 保留可见诊断文本供手动复制 */ }
 					finally { if (box && box.parentNode) box.parentNode.removeChild(box); }
 				}
-				setCopyNotice(copied ? "诊断已复制（包含本机宿主路径）" : "复制失败；已展开诊断文本，请手动复制");
-				if (!copied) setShowDiagnostic(true);
+				setCopyNotice(copied ? scope + "诊断已复制（包含本机宿主路径）" : "复制失败；已展开诊断文本，请手动复制");
+				if (!copied) { setShownDiagnostics(text); setShowDiagnostic(true); }
 			};
 			return h("div", { className: "dshp-clean-browser" },
 				h("div", { className: "dshp-clean-tools" },
@@ -1461,15 +1501,26 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("div", { className: "dshp-row" },
 						h("span", { className: "dshp-clean-count", role: "status" },
 							"显示 " + selected.length + " / " + rows.length + " 项；跳过不代表失败"),
-						h(Btn, { tiny: true, onClick: () => setShowDiagnostic((v) => !v) },
+						h(Btn, { tiny: true, onClick: () => { setShownDiagnostics(null); setShowDiagnostic((v) => !v); } },
 							showDiagnostic ? "收起诊断" : "查看诊断"),
-						h(Btn, { tiny: true, onClick: copyDiagnostics }, "复制完整诊断"),
+						h(Btn, { tiny: true, disabled: Boolean(busy || refreshBusy), onClick: refreshPatches }, refreshBusy ? "检测中…" : "重新检测"),
+						h(Btn, { tiny: true, onClick: () => copyDiagnostics(filteredDiagnostics, "当前筛选") }, "复制当前筛选"),
+						h(Btn, { tiny: true, onClick: () => copyDiagnostics(diagnostics, "完整") }, "复制完整诊断"),
 					),
 					copyNotice ? h("p", { className: "dshp-hint", role: "status" }, copyNotice) : null,
+					refreshReport ? h("div", { className: "dshp-clean-refresh", role: "status" },
+						refreshReport.error ? "重新检测失败：" + refreshReport.error
+						: (refreshReport.changes.length
+							? h("details", { open: true },
+								h("summary", null, "已重新检测，" + refreshReport.changes.length + " 项补丁状态发生变化"),
+								h("ul", null, refreshReport.changes.map((change) =>
+									h("li", { key: change.id }, change.id + " " + change.title + "：" + change.before + " → " + change.after))))
+							: "已重新检测；补丁状态没有变化")
+					) : null,
 					showDiagnostic ? h("pre", {
 						className: "dshp-clean-diagnostic",
 						tabIndex: 0, "aria-label": "完整清洗诊断文本",
-					}, diagnostics) : null,
+					}, shownDiagnostics || diagnostics) : null,
 				),
 				!state.ai_base
 					? h("p", { className: "dshp-hint" }, "尚未定位到宿主；诊断可复制，补丁列表等待宿主加载。")
@@ -1941,6 +1992,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					setUpdateInfo(prevInfo);
 				});
 			}, [channel, pick, postUpdate, updateInfo]);
+
+			const refreshPatchStatus = useCallback(async () => {
+				const status = await apiJson("/dsh-purge/status");
+				if (!status || !status.ok || status.ready === false) {
+					throw new Error((status && status.error) || "宿主状态暂不可用");
+				}
+				setState(status);
+				return status;
+			}, []);
 
 			const loadAll = useCallback(() => {
 				const tr = tRef.current;
@@ -2418,7 +2478,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					role: job.error ? "alert" : "status",
 				}, job.error ? "清洗流程失败：" + job.error : job.detail) : null,
 				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
-				h(PatchGroups, { state: s }),
+				h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: patchBusy || uninstallBusy }),
 				h(InjectSwitchSection),
 				h(HooksDenySection, { onSaved: loadAll }),
 				h("div", { className: "dshp-row", style: { marginTop: 12 } },

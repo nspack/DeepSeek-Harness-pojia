@@ -12,7 +12,10 @@ function isolated(name, next, globals = {}) {
   return runInNewContext('(' + client.slice(from, to).trim() + ')', globals)
 }
 
-const filterPatchRows = isolated('filterPatchRows', 'formatPatchDiagnostics')
+const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
+const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
+  patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
+})
 const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'PatchGroups', {
   tallyPatches: (rows) => rows.reduce((o, row) => {
     o.total += 1
@@ -100,4 +103,52 @@ test('single-ID patches do not add redundant child-state lines', () => {
     patch_status: { 7: 'pending' },
   }, [{ id: 7, ids: [7], st: 'pending', layer: 'Code', title: 'Entry' }], (s) => s)
   assert.ok(!report.includes('子补丁：'))
+})
+
+test('read-only rescan compares prior and next patch states, including added and missing rows', () => {
+  const before = [
+    { id: 2, ids: [2, 12], title: 'Compose', st: 'pending' },
+    { id: 3, ids: [3], title: 'Injection', st: 'unmatched' },
+    { id: 4, ids: [4], title: 'Optional', st: 'skipped' },
+  ]
+  const after = [
+    { id: 2, ids: [2, 12], title: 'Compose', st: 'already' },
+    { id: 3, ids: [3], title: 'Injection', st: 'unmatched' },
+    { id: 5, ids: [5], title: 'New patch', st: 'pending' },
+  ]
+  const changes = patchStatusChanges(before, after)
+  assert.equal(changes.length, 3)
+  assert.equal(changes[0].id, '#2/#12')
+  assert.equal(changes[0].before, 'pending')
+  assert.equal(changes[0].after, 'already')
+  assert.equal(changes[1].id, '#5')
+  assert.equal(changes[1].before, '未列出')
+  assert.equal(changes[2].id, '#4')
+  assert.equal(changes[2].after, '未列出')
+  assert.equal(patchStatusChanges(after, after).length, 0)
+})
+
+test('diagnostics surface host discovery and sealed-asar failures', () => {
+  const report = formatPatchDiagnostics({
+    plugin_version: 'test',
+    surface: 'desktop',
+    ai_base: '',
+    missing_ai_base: 'Unable to find the active desktop installation',
+    desktop_exe: 'D:\\Apps\\DeepSeek\\Harness.exe',
+    asar_still_sealed: true,
+  }, [], (s) => s)
+  assert.match(report, /宿主定位说明: Unable to find/)
+  assert.match(report, /桌面程序: D:\\Apps\\DeepSeek\\Harness.exe/)
+  assert.match(report, /app.asar 仍封装/)
+})
+
+test('rescan and filtered diagnostic export use read-only host endpoint without touching prompt editor', () => {
+  assert.match(client, /const refreshPatchStatus = useCallback\(async \(\) => \{/)
+  assert.match(client, /const status = await apiJson\("\/dsh-purge\/status"\)/)
+  assert.match(client, /h\(PatchGroups, \{ state: s, onRefresh: refreshPatchStatus/)
+  assert.match(client, /patchStatusChanges\(rows, updated\)/)
+  assert.match(client, /复制当前筛选/)
+  assert.match(client, /copyDiagnostics\(filteredDiagnostics, "当前筛选"\)/)
+  assert.match(client, /setShownDiagnostics\(text\)/)
+  assert.match(client, /shownDiagnostics \|\| diagnostics/)
 })
