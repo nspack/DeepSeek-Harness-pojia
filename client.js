@@ -5402,7 +5402,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     onClick: () => manageExternal(true) }, '更新技能') : null,
               h('button', { className: 'rt-btn', disabled: externalRequest, onClick: loadExternal }, '检查状态')),
             h('div', { style: { fontSize: 11, marginTop: 6 } },
-              '按需从 wgpsec/AboutSecurity 下载 skills/；只提供本地检索/阅读，不等于 DSH 原生技能注册。'),
+              '按需从 wgpsec/AboutSecurity 下载 skills/；宿主支持时自动注册，是否成功以「宿主已列出」标记为准。'),
             externalError ? h('div', { className: 'rt-err', style: { marginTop: 6 } }, externalError) : null),
           err
             ? (needRestart

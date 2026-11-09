@@ -9,7 +9,7 @@
 - **从上游安装**：显式点击后，通过本机 Git 稀疏检出 `wgpsec/AboutSecurity` 的 `skills/`，只安装到当前 `DSH_HOME`；插件启动时不会自动下载。
 - **更新技能**：已有 Git 安装目录时按需执行快进更新；安装/更新进度会在页面显示，完成后刷新技能目录。
 - **检查状态**：显示是否安装及本机可检索技能数量。
-- **浏览正文**：左侧列表有独立的 AboutSecurity 分类，选择条目可以查看 Markdown；“未列入宿主”仍表示尚未经过 DSH 原生 Provider 注册，不影响模型通过 `redteam_skill_search` / `redteam_skill_read` 读取。
+- **浏览正文**：左侧列表有独立的 AboutSecurity 分类，选择条目可以查看 Markdown；宿主提供原生 Skills 服务时，安装后自动注册并在列表中显示“宿主已列出”。没有这个服务时仍能通过 `redteam_skill_search` / `redteam_skill_read` 读取。
 
 需要 Git 可执行程序在运行 DSH 的那台 Windows/Linux 设备的 PATH 里；若缺少 Git，页面会给出明确错误，不影响已有功能。
 
@@ -41,6 +41,10 @@ node scripts/install-aboutsecurity.mjs --update
 
 脚本不挂在 `postinstall` 或插件启动过程上，不关闭 DSH，不更新宿主补丁，不改变现有资产、漏洞、凭据与任务台账。Git 拉取失败会报告错误，旧安装保持现状；首次安装失败时只清理由该次命令创建的外部技能检出目录。
 
+## 原生技能提供器
+
+本插件现在可以通过 `dsh-purge-aboutsecurity` 原生 Provider 发布 AboutSecurity 技能；为避免与原有插件/用户技能重名，原生名称带 `aboutsecurity-` 前缀，例如 `aboutsecurity-recon-passive-recon`。原来的稳定工具检索键 `aboutsecurity:recon/passive-recon` 仍然可用。技能只从本机安装目录读取，**不会在宿主启动时自动下载**。
+
 ## 在 DSH 的作战模式里使用
 
 1. `redteam_skill_search(query="OSINT")` 列出相关技能，也可以传空查询列出最多 50 项。
@@ -54,7 +58,7 @@ node scripts/install-aboutsecurity.mjs --update
 - 下载进程在宿主后台执行并由界面轮询状态；不影响其他技能显示。用户明确点击才会发起 Git 网络请求。
 
 
-- 目前是**模型工具级别的技能检索和读取**，不等同于已通过 DSH 官方 `skills.registerProvider` 注册或经过端到端模型调用验收。
+- 原生接线采用上游公开的 `ctx.inject(['skills'])` / `skills.registerProvider()` 接口，插件启动时已有本地技能则注册，页面安装或更新成功后同步刷新；安装失败时保留旧的可用注册。**是否在当前宿主真正可调用仍以 `skills.list` 的结果和 Desktop 实机为准**，不能仅因本地文件存在就宣称成功。
 - REA 的既有集成原样保留。AboutSecurity 与 REA 是不同来源，不会因安装其中一个而覆盖另一个。
 - 不能仅凭 `SKILL.md` 存在断言其中依赖的程序、环境变量或接口已经可用。需要执行时，仍用现有 `redteam_preflight` 或实际运行结果判断。
-- 后续如需在「管理 → 技能库」增加按钮、状态与原生 Provider，可复用当前下载目录和工具，不再建第二套管理数据库。
+- 如果使用独立命令行脚本在 DSH 运行期间安装或更新（而不是使用作战台按钮），原生 Provider 可能需要重启宿主后才能重新注册；模型工具的本地检索不受影响。
