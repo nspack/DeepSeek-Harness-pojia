@@ -46,6 +46,10 @@ jobs:
         if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
         shell: pwsh
         run: ./scripts/test-desktop-updater.ps1
+      - name: Exercise Windows pnpm junction rollback
+        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        shell: pwsh
+        run: ./scripts/test-desktop-updater-junction.ps1
       - name: Run unit and actual public API contract tests
         shell: bash
         run: |
