@@ -7,12 +7,15 @@
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, relative, isAbsolute } from 'node:path'
 
 const REMOTE = 'https://github.com/wgpsec/AboutSecurity.git'
 const args = process.argv.slice(2)
 if (args.includes('--help') || args.includes('-h')) {
-  console.log('Usage: node scripts/install-aboutsecurity.mjs [--home DSH_HOME] [--update]')
+  console.log('Usage: node scripts/install-aboutsecurity.mjs [--home DSH_HOME] [--update] [--remove]')
+  console.log('  (no flag)  install once; existing checkout is kept untouched')
+  console.log('  --update   git pull upstream skills/ in place')
+  console.log('  --remove   delete the local checkout created by this script')
   process.exit(0)
 }
 const homeAt = args.indexOf('--home')
@@ -40,6 +43,26 @@ function countSkills(dir) {
     }
   }
   return count
+}
+
+if (args.includes('--remove')) {
+  /* 只删本脚本创建的那一个检出目录：先确认它确实在 $DSH_HOME/redteam/external-skills 下，
+     再判断它是不是 AboutSecurity 的 git 检出，避免把用户自己的同名目录删掉。 */
+  const parent = join(home, 'redteam', 'external-skills')
+  const rel = relative(resolve(parent), resolve(destination))
+  const inside = rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+  if (!inside) throw new Error('refusing to remove a path outside ' + parent)
+  if (!existsSync(destination)) {
+    console.log('Nothing to remove: ' + destination)
+    process.exit(0)
+  }
+  if (!existsSync(join(destination, '.git'))) {
+    throw new Error('refusing to remove a directory that is not an AboutSecurity checkout: ' + destination)
+  }
+  rmSync(destination, { recursive: true, force: true })
+  console.log('Removed: ' + destination)
+  console.log('The redteam skill list no longer includes AboutSecurity entries after the next host refresh.')
+  process.exit(0)
 }
 
 if (updating) {

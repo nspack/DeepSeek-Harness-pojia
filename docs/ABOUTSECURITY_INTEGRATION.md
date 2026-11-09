@@ -39,6 +39,20 @@ $DSH_HOME/redteam/external-skills/aboutsecurity/skills
 node scripts/install-aboutsecurity.mjs --update
 ```
 
+### 卸载
+
+```powershell
+node scripts/install-aboutsecurity.mjs --remove
+```
+
+只删本脚本创建的那一个检出目录（`$DSH_HOME/redteam/external-skills/aboutsecurity`），三条例外一律拒绝：
+
+- 路径不在 `$DSH_HOME/redteam/external-skills/` 下 → 拒绝；
+- 目录里没有 `.git`（不是本脚本的检出，例如你自己放的同名目录）→ 拒绝，文件原样保留；
+- 目录不存在 → 打印 `Nothing to remove` 并退出 0，不创建任何东西。
+
+卸载后作战台的 AboutSecurity 分类会消失；`redteam_skill_search` 也不再返回对应条目。宿主的原生技能列表需要下一次刷新才同步。图形界面里同样有安装/更新状态，卸载走上面这条命令（界面不提供删除按钮，避免误点）。
+
 脚本不挂在 `postinstall` 或插件启动过程上，不关闭 DSH，不更新宿主补丁，不改变现有资产、漏洞、凭据与任务台账。Git 拉取失败会报告错误，旧安装保持现状；首次安装失败时只清理由该次命令创建的外部技能检出目录。
 
 ## 原生技能提供器

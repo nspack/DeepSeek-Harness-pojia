@@ -1,6 +1,6 @@
 {
   "name": "dsh-purge",
-  "version": "1.1.92-wxcvm.4",
+  "version": "1.1.92-wxcvm.5",
   "description": "DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分",
   "type": "module",
   "main": "lib/index.js",
@@ -85,8 +85,8 @@
     },
     "install": {
       "preferred": "tarball",
-      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.4",
-      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.4",
+      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.5",
+      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.5",
       "git": "https://github.com/wxcvm/dsh-purge.git"
     }
   },

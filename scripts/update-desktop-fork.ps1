@@ -3,11 +3,21 @@
 param(
   [string]$DshHome = '',
   [ValidateSet('desktop','web')][string]$Profile = 'desktop',
+  # 默认取本仓库 package.json 的版本，避免每次发版都要改脚本（-Version 可显式覆盖）
+  [string]$Version = '',
   [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
-$version = '1.1.92-wxcvm.4'
-$source = 'https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.4'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$manifestPath = Join-Path $repoRoot 'package.json'
+if (-not $Version) {
+  if (-not (Test-Path -LiteralPath $manifestPath)) {
+    throw "Cannot determine release version: $manifestPath not found. Pass -Version explicitly."
+  }
+  $Version = (Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json).version
+}
+$version = $Version
+$source = "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v$version"
 
 if (-not $DshHome) {
   $candidates = @()

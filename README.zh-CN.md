@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.4</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.5</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -67,7 +67,7 @@
 
 ## 介绍
 
-**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.4**，`package.json` 声明支持 **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2**；其中 0.2.2-rc.1 的集成测试与 Windows 实际图形界面验收是不同的检查，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
+**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.5**，`package.json` 声明支持 **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2**；其中 0.2.2-rc.1 的集成测试与 Windows 实际图形界面验收是不同的检查，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
 
 Harness 不只是把问题交给模型。它还会在运行时改提示词、审批门、沙箱和会话格式。只看「模型答不答」，会把宿主拦截误当成模型拒绝。这个插件在你自己的安装里把这两层分开，用来做受控评测，也用来看默认策略该不该收紧。
 
@@ -163,7 +163,7 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 ## 适配范围
 
-**当前维护包：1.1.92-wxcvm.4**，声明支持 DSH `0.2.2-rc.1`、`0.2.1-rc.5`、`0.2.1-rc.2`。下列 `1.1.81` 信息属于历史兼容记录，不是当前版本号，也不是降级建议。
+**当前维护包：1.1.92-wxcvm.5**，声明支持 DSH `0.2.2-rc.1`、`0.2.1-rc.5`、`0.2.1-rc.2`。下列 `1.1.81` 信息属于历史兼容记录，不是当前版本号，也不是降级建议。
 
 - **dsh 0.2.1-rc.5**（官方桌面，宿主密封在 `app.asar` 里）：用 **1.1.81**。解包后跑补丁：82 个补丁里 **66 个直接 applied**、47 个文件被改写、`node --check` 0 失败；桌面壳 5 条里 #45/#82/#83/#84 命中（#84 依赖 #83 的输出），#46 的官方换包脚本改写点在 rc.5 已被上游重写，只剩一个无害的空转。`app.asar` 还在时点「应用」会先解包到 `resources\app` 再自动重启。
 - **dsh 0.2.1-rc.2**（官方桌面 / 官方 `dsh web`）：用 **1.1.81**。已修 `{{cwd}}` / `[cwd]` 整轮失败、补丁 #40 命中、`toolFilter` 废弃、`dsh-tools` 解析、hostFs fd、桌面换包自杀、`file:` 归档更新、Ctrl+Enter 插话。
@@ -249,7 +249,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 桌面客户端也可以点按钮（`dsh://` 唤起，下的仍是同一份压缩包）：
 
 <p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.92-wxcvm.4&repo=wxcvm%2Fdsh-purge&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv1.1.92-wxcvm.4"><strong>唤起客户端一键安装</strong></a>
+  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.92-wxcvm.5&repo=wxcvm%2Fdsh-purge&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv1.1.92-wxcvm.5"><strong>唤起客户端一键安装</strong></a>
 </p>
 
 ### 3. 装完还要做这三下
