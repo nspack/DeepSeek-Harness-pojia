@@ -59,6 +59,15 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `label` — acquire 时的任务标签，例如「信息收集：主域与 C 段」
 - `key` — release 时指定要释放的键（省略则释放最早的一个预留）
 
+### `redteam_tool_select`
+【只读】按任务类型查找当前本机可用路径，自动优先推荐具有明确版本探测参数的工具；可返回候选与来源。不会执行网络探测或目标扫描，不把“找到可执行文件”当作实际测试成功。
+
+参数：
+- `task` — `domains`、`services`、`web`、`vulns`、`internal`、`identity`、`connectivity`
+- `verify` — 可选；`true` 时仅执行推荐工具已定义的本地版本参数，返回 `version-verified`、`path-only` 或 `verification-failed`。默认不运行任何程序。
+
+候选优先级根据本机路径与已知版本探测能力确定，不修改已有工具的执行权限，也不会自动选择执行目标测试。其他自定义工具在环境目录中显示但不作为自动执行的候选。
+
 ### `redteam_preflight`
 【开工前必须跑一次】平台技能与资源自检：逐个检查红队技能的必需环境变量（如 FOFA 测绘的 FOFA_KEY）、本机工具与二进制（suo5 / fscan / gogo / frp / 冰蝎 / 哥斯拉 / nmap / nuclei…）、外部基础设施（反弹 Shell 用的 VPS）。返回 available/broken 清单与每个坏掉的技能"缺什么、怎么补"。**缺 key / 缺 VPS 时直接向用户要，或改用替代方案，不要假装能跑。**
 

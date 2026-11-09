@@ -64,6 +64,7 @@
   "redteam_skill_search",
   "redteam_task_block",
   "redteam_task_context",
+  "redteam_tool_select",
   "redteam_tunnel_add",
   "redteam_tunnel_list",
   "redteam_tunnel_update",

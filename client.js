@@ -6914,6 +6914,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [toolGroup, setToolGroup] = React.useState('all')
       const [toolChecks, setToolChecks] = React.useState({})
       const [checkingTool, setCheckingTool] = React.useState(null)
+      const [taskId, setTaskId] = React.useState('services')
+      const [taskPlan, setTaskPlan] = React.useState(null)
+      const [taskBusy, setTaskBusy] = React.useState(false)
 
       const applyDraftFrom = (r) => {
         const c = (r && r.config) || {}
@@ -6935,6 +6938,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         api({ op: 'platformConfigGet' }).then((r) => {
           setBusy(false)
           setToolChecks({})
+          setTaskPlan(null)
           if (!r || r.ok === false) { setErr((r && r.error) || '读取失败'); return }
           setErr(null); setData(r)
           applyDraftFrom(r)
@@ -6962,6 +6966,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '保存失败' }); return }
           setData(r)
           setToolChecks({})
+          setTaskPlan(null)
           setMsg({ ok: '已保存到 '  + ((r.config && r.config.path) || '$DSH_HOME/redteam/config.json') })
           applyDraftFrom(r)
         }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
@@ -6976,6 +6981,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '自动分配失败' }); return }
           setData(r)
           setToolChecks({})
+          setTaskPlan(null)
           applyDraftFrom(r)
           setMsg({
             ok: '已从文件夹分配 ' + (r.assignedCount || 0) + ' 个工具'
@@ -6984,6 +6990,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
       }
 
+      const planForTask = () => {
+        if (busy || taskBusy) return
+        setTaskBusy(true)
+        setTaskPlan(null)
+        api({ op: 'platformTaskPlan', task: taskId }).then((result) => {
+          setTaskBusy(false)
+          setTaskPlan(result || { ok: false, error: '工具选择没有返回结果' })
+        }, (error) => {
+          setTaskBusy(false)
+          setTaskPlan({ ok: false, error: String((error && error.message) || error) })
+        })
+      }
       const checkTool = (id) => {
         if (busy || checkingTool) return
         setCheckingTool(id)
@@ -7010,6 +7028,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const adapt = (data && data.adapt) || {}
       const tools = (data && data.tools && data.tools.items) || []
       const found = tools.filter((t) => t.path).length
+      const taskProfiles = (data && data.taskProfiles) || []
+      const selectedCheck = taskPlan && taskPlan.selected ? toolChecks[taskPlan.selected.id] : null
       const toolGroups = [
         { id: 'recon', title: '侦察与资产发现' },
         { id: 'scan', title: '扫描与漏洞检测' },
@@ -7113,6 +7133,39 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   value: (draft.env && draft.env[k]) || '',
                   onChange: (e) => setEnv(k, e.target.value),
                 }))))),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '按任务选择工具'),
+            h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
+              '按任务和本机已发现的程序匹配，不会启动目标测试。'),
+            h('div', { style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } },
+              h('select', { className: 'rt-input', style: { flex: '1 1 150px' },
+                value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null) } },
+                taskProfiles.map((p) => h('option', { key: p.id, value: p.id }, p.label))),
+              h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
+                disabled: busy || taskBusy || taskProfiles.length === 0,
+                onClick: planForTask }, taskBusy ? '匹配中…' : '匹配本机工具')),
+            taskPlan ? h('div', { style: { marginTop: 8, fontSize: 12, lineHeight: 1.6 } },
+              !taskPlan.ok
+                ? h('div', { className: 'rt-err' }, taskPlan.error || '工具匹配失败')
+                : h('div', null,
+                  h('div', { style: { fontWeight: 600 } },
+                    taskPlan.selected ? '推荐：' + taskPlan.selected.label : '没有发现这个任务所需的工具'),
+                  taskPlan.selected ? h('div', { className: 'rt-mono', style: { fontSize: 11, overflowWrap: 'anywhere' } },
+                    '来源：' + (sourceLabels[taskPlan.selected.source] || taskPlan.selected.source) + ' · ' + taskPlan.selected.path) : null,
+                  h('div', { style: { opacity: 0.8, marginTop: 4 } },
+                    (taskPlan.candidates || []).map((c) => c.label + '：' + (c.detected ? '已找到' : '缺失')).join(' / ')),
+                  taskPlan.selected && taskPlan.selected.canProbe
+                    ? h('button', { type: 'button', className: 'rt-btn',
+                        disabled: busy || checkingTool !== null, onClick: () => checkTool(taskPlan.selected.id) },
+                        checkingTool === taskPlan.selected.id ? '检测中…' : '验证推荐工具版本')
+                    : null,
+                  selectedCheck ? h('div', { style: { marginTop: 5 } },
+                    selectedCheck.status === 'runnable' ? '本地版本命令成功：' + (selectedCheck.version || '')
+                    : selectedCheck.status === 'path-only' ? '仅找到路径，未执行版本验证'
+                    : '本地版本验证未通过：' + (selectedCheck.error || selectedCheck.status)) : null,
+                  h('div', { style: { opacity: 0.75, fontSize: 11, marginTop: 4 } },
+                    '版本验证只检测本机程序，不代表目标测试或任务执行成功。')))
+              : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 已找到）'),
             h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
