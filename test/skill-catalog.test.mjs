@@ -39,3 +39,40 @@ test('技能搜索、读取只读且返回数量受请求约束', (t) => {
   assert.equal(item.content.length <= 1000, true)
   assert.equal(item.key, 'redteam:web-injection')
 })
+
+test('块标量 description（| 与 >）要读成正文，而不是字面量管道符', (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'purge-skill-block-'))
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+  const literal = join(aboutSecurityDir(home), 'ai-security', 'agent-security')
+  mkdirSync(literal, { recursive: true })
+  writeFileSync(join(literal, 'SKILL.md'), [
+    '---',
+    'name: agent-security',
+    'description: |',
+    '  AI Agent 系统安全测试方法论。',
+    '  覆盖 OWASP Agentic AI Top 10。',
+    'metadata:',
+    '  category: ai-security',
+    '---',
+    '# 正文',
+  ].join('\n'))
+  const folded = join(aboutSecurityDir(home), 'web', 'xss')
+  mkdirSync(folded, { recursive: true })
+  writeFileSync(join(folded, 'SKILL.md'), [
+    '---',
+    'name: xss',
+    'description: >',
+    '  跨站脚本检测，',
+    '  含上下文与绕过。',
+    '---',
+    '# 正文',
+  ].join('\n'))
+
+  const rows = listLocalSkills({ home }).filter((row) => row.source === 'aboutsecurity')
+  const agent = rows.find((row) => row.name === 'agent-security')
+  const xss = rows.find((row) => row.name === 'xss')
+  assert.ok(agent.description.includes('AI Agent 系统安全测试方法论'), '块标量 | 必须展开成正文')
+  assert.ok(!/^\s*[|>]\s*$/.test(agent.description), 'description 不能是字面量 | 或 >')
+  assert.equal(xss.description, '跨站脚本检测， 含上下文与绕过。', '折叠标量按 YAML 语义用空格连接各行')
+  assert.ok(!xss.description.includes('|'), '折叠标量不能残留标记')
+})
