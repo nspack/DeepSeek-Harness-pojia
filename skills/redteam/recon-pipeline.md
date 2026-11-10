@@ -81,14 +81,14 @@ $TK/naabu/naabu -host 1.2.3.4 -p - -rate 1000 -silent
 
 | 场景 | 用哪个 |
 | --- | --- |
-| 单位名/域名 → 互联网资产面（含未备案、同主体） | **`fofa-recon`**（测绘，找得最全） |
+| 单位名/域名 → 互联网资产线索（确认归属） | **`passive-recon` + 本技能**（默认无需 FOFA_KEY） |
 | 域名 → 子域 → 存活 → 指纹 | **本技能**（流水线，标准化） |
 | 不接触目标（纯被动） | `passive-recon`（crt.sh/dig/whois） |
 | 内网大网段测绘 | `gogo-intranet`（**不要用本技能打内网**） |
 | SP​A/JS 渲染页面、接口清单 | `browser-automation` / `kimi-webbridge` |
 | 存活主机端口/服务版本 | `active-scan`（nmap/masscan） |
 
-**推荐顺序**：`fofa-recon` 铺面（拿单位资产全景）→ 本技能对每个域名做流水线（拿存活与指纹）→ `active-scan` 对重点 IP 定版本。
+**推荐顺序（默认无 FOFA）**：先核对现有资产与授权范围 → `passive-recon`（证书透明 / DNS / whois）→ 本技能的 `subfinder → dnsx` → 对已授权目标按需使用 `naabu / httpx` → `active-scan` 细化服务信息。`fofa-recon` 只作为已配置 API Key 时的补充来源，不能阻塞整个流程；没有 Key 不需要向用户索取。
 
 ## 纪律
 
