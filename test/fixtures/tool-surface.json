@@ -33,6 +33,7 @@
   "redteam_http_evidence_add",
   "redteam_http_evidence_query",
   "redteam_ingest",
+  "redteam_local_asset_search",
   "redteam_next_action",
   "redteam_poc_add",
   "redteam_poc_get",

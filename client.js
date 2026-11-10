@@ -7114,6 +7114,131 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 '本地 scan-output 中的原始输出和必要执行清单继续保留，用于核对扫描结果；不会替你删除证据。')))))
     }
 
+    /* ---------------------------------------------------------- 本地 FOFA 风格测绘：只读现有资产 */
+    function LocalAssetSearchTab(props) {
+      const eng = props.engagement
+      const [draft, setDraft] = React.useState('domain="example.org" && port=443')
+      const [query, setQuery] = React.useState('')
+      const [sort, setSort] = React.useState('discovered')
+      const [page, setPage] = React.useState(0)
+      const [refresh, setRefresh] = React.useState(0)
+      const [result, setResult] = React.useState(null)
+      const [error, setError] = React.useState('')
+      const [detail, setDetail] = React.useState(null)
+      const [detailId, setDetailId] = React.useState(null)
+      const limit = 30
+      const examples = [
+        ['域名和端口', 'domain="example.org" && port=443'],
+        ['网页标题', 'title="登录"'],
+        ['服务与产品', 'service="http" || product="nginx"'],
+        ['证书线索', 'cert="Example CA"'],
+        ['内部资产', '(port=443 || port=8080) && scope=internal'],
+      ]
+      const search = (value) => {
+        const next = String(value === undefined ? draft : value).trim()
+        if (!next) { setError('请输入搜索表达式'); return }
+        setError('')
+        setPage(0)
+        setDraft(next)
+        if (query === next) setRefresh((n) => n + 1)
+        else setQuery(next)
+      }
+      React.useEffect(() => {
+        let active = true
+        setResult(null); setError(''); setDetail(null); setDetailId(null)
+        if (!eng || !query) return () => { active = false }
+        api({ op: 'localAssetSearch', engagement: eng, query, sort, limit,
+          offset: page * limit }).then((r) => {
+          if (!active) return
+          if (!r || r.ok === false) setError((r && r.error) || '本地查询失败')
+          else setResult(r)
+        }, (e) => { if (active) setError(String((e && e.message) || e)) })
+        return () => { active = false }
+      }, [eng, query, sort, page, refresh, props.refreshKey])
+      const inspect = (id) => {
+        if (detailId === id) { setDetailId(null); setDetail(null); return }
+        const engagement = eng
+        setDetailId(id); setDetail(null)
+        api({ op: 'asset', engagement, id }).then((r) => {
+          if (r && r.ok && r.asset && r.asset.id === id) setDetail(r.asset)
+        }, () => {})
+      }
+      const data = result && result.engagement === eng ? result : null
+      const items = (data && data.items) || []
+      return h('div', { className: 'rt-main' },
+        h('div', { className: 'rt-toolbar' },
+          h('b', null, '本地资产测绘'),
+          h('span', { className: 'rt-tag rt-tag-live' }, '离线 · SQLite'),
+          h('div', { className: 'rt-spacer' }),
+          h('button', { className: 'rt-btn', onClick: () => search() }, '刷新'),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng,
+            onClick: () => search() }, '搜索')),
+        h('div', { className: 'rt-pane' },
+          h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.7 } },
+            '这是已收集资产的离线查询，不依赖 FOFA_KEY，也不会对目标发起探测。结果覆盖范围仅限当前工作区已入库的数据。'),
+          h('div', { className: 'rt-card' },
+            h('label', { style: { fontSize: 12, display: 'block', marginBottom: 7 } },
+              '组合查询：字段=值，可使用 && / || / AND / OR 与括号'),
+            h('textarea', { className: 'rt-textarea',
+              style: { minHeight: 84, height: 84, resize: 'vertical', fontSize: 12 },
+              value: draft, onChange: (e) => setDraft(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); search() }
+              } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 } },
+              examples.map(([label, sample]) => h('button', { key: label, className: 'rt-btn',
+                onClick: () => search(sample) }, label))),
+            h('div', { style: { marginTop: 9, fontSize: 11, opacity: 0.8 } },
+              '可用：domain / host / ip / port / title / banner / url / service / product / app / fingerprint / cert / protocol / scope / source。'
+              + ' 不支持未保存的网页正文 body=；证书条件仅检索已保存的证书观察或 TLS 指纹。'),
+            h('select', { className: 'rt-input', style: { marginTop: 8, width: 190 },
+              value: sort, onChange: (e) => { setSort(e.target.value); setPage(0) } },
+              h('option', { value: 'discovered' }, '按发现时间排序'),
+              h('option', { value: 'ports' }, '开放端口多优先'),
+              h('option', { value: 'ip' }, '按 IP 排序'),
+              h('option', { value: 'priority' }, '按已有优先级排序'))),
+          error ? h('div', { className: 'rt-err' }, error) : null,
+          data ? h('div', { className: 'rt-card', style: { fontSize: 12 } },
+            '当前项目命中 ' + data.total + ' 项 · 本页 ' + items.length + ' 项。搜索不触网、不触发扫描。')
+            : query && !error ? h('div', { className: 'rt-empty' }, '正在查询本地资产库…')
+              : h('div', { className: 'rt-empty' }, '填写条件并点击搜索；也可以选择一个示例。'),
+          data && items.length === 0 ? h('div', { className: 'rt-empty' }, '没有匹配的已登记资产；不代表互联网中不存在该目标。') : null,
+          items.map((item) => h('div', { key: item.id, className: 'rt-card',
+            style: { fontSize: 12, lineHeight: 1.65 } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+              h('b', null, item.primary_name || item.ip),
+              h('span', { className: 'rt-mono', style: { opacity: 0.8 } }, item.ip),
+              h('span', { className: 'rt-tag' }, item.scope || 'unknown'),
+              h('div', { className: 'rt-spacer' }),
+              h('button', { className: 'rt-btn', onClick: () => inspect(item.id) },
+                detailId === item.id ? '收起详情' : '查看证据详情')),
+            h('div', null,
+              '开放端口：' + ((item.ports || []).filter((p) => p.state === 'open')
+                .map((p) => p.port + (p.service ? '/' + p.service : '')).join(', ') || '无')),
+            h('div', { style: { opacity: 0.8 } },
+              '指纹：' + ((item.fingerprints || []).map((fp) => [fp.vendor, fp.product, fp.version]
+                .filter(Boolean).join(' ')).filter(Boolean).join(' · ') || '未采集')),
+            detailId === item.id ? h('div', { style: { marginTop: 8 } },
+              detail && detail.id === item.id
+                ? h('div', null,
+                    h('div', null, '已登记域名：' + ((detail.names || []).map((n) => n.name).join(', ') || '无')),
+                    (detail.ports || []).map((p, i) => h('div', { key: i },
+                      p.port + '/' + (p.proto || 'tcp') + ' ' + (p.service || '')
+                        + ' ' + (p.product || '') + ' ' + (p.title || ''))),
+                    h('div', { style: { opacity: 0.7 } }, '仅展示已有记录；未进行新的资产探测。'))
+                : h('div', null, '读取资产详情中…'))
+              : null)),
+          data && data.total > limit ? h('div', { style: { display: 'flex',
+            alignItems: 'center', justifyContent: 'center', gap: 8 } },
+            h('button', { className: 'rt-btn', disabled: page === 0,
+              onClick: () => setPage((p) => Math.max(0, p - 1)) }, '上一页'),
+            h('span', { style: { fontSize: 12 } },
+              '第 ' + (page + 1) + ' 页 / 共 ' + Math.ceil(data.total / limit) + ' 页'),
+            h('button', { className: 'rt-btn', disabled: (page + 1) * limit >= data.total,
+              onClick: () => setPage((p) => p + 1) }, '下一页'))
+            : null))
+    }
+
     function EnvTab(props) {
       const refreshKey = props.refreshKey || 0
       const [data, setData] = React.useState(null)
@@ -9232,7 +9357,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['overview', '概览'], ['assets', '资产'], ['scan-history', '扫描记录'], ['findings', '漏洞'],
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
-        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['artex', 'ARTEX']] },
+        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['local-search', '本地测绘'], ['artex', 'ARTEX']] },
         { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
@@ -9281,6 +9406,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn rt-btn-primary', disabled: creating, onClick: () => openEngagement() },
                 creating ? '创建中…' : '创建靶标'))))
       } else if (st.tab === 'intel') body = h(IntelTab, { engagement: eng, refreshKey: refreshKey })
+      else if (st.tab === 'local-search') body = h(LocalAssetSearchTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'overview') body = h(OverviewTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onGoto: (tab) => { markTabSeen(tab); setUI({ tab }); setRefreshKey((k) => k + 1) } })
       else if (st.tab === 'scan-history') body = h(ScanHistoryTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'assets') body = h(AssetsTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
