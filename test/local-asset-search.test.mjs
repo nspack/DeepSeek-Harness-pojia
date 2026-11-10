@@ -104,7 +104,7 @@ test('source and embedded frontend both expose the offline asset search page', a
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const code = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
     assert.match(code, /function LocalAssetSearchTab/)
-    assert.match(code, /\['local-search', '本地测绘'\]/)
+    assert.match(code, /\['local-search', '测绘中心'\]/)
     assert.match(code, /op: 'localAssetSearch'/)
   }
   const tools = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
