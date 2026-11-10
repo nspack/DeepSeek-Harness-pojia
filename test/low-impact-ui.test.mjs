@@ -28,11 +28,13 @@ test('workbench API saves only scan preferences and preserves existing configura
   assert.equal(result.ok, true)
   result = dispatch(store, { op: 'platformConfigSave', config: { scanPreferences: {
     mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false, maskHistory: true,
+    noReverseDns: true, maskAssetResults: true,
   } } })
   assert.equal(result.ok, true)
   assert.equal(result.config.tools.nmap, '/mock/nmap')
   assert.deepEqual(result.config.scanPreferences, {
     mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false, maskHistory: true,
+    noReverseDns: true, maskAssetResults: true,
   })
   const loaded = dispatch(store, { op: 'platformConfigGet' })
   assert.deepEqual(loaded.config.scanPreferences, result.config.scanPreferences)

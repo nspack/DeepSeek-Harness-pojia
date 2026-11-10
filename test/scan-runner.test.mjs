@@ -145,3 +145,10 @@ test('standard scan arguments remain unchanged if no preference was enabled', ()
   assert.deepEqual(scanCommand('nmap', '192.0.2.10').args,
     ['-sT', '-sV', '--open', '-oX', '-', '192.0.2.10'])
 })
+
+test('optional reverse DNS suppression only changes Nmap when enabled', () => {
+  assert.deepEqual(scanCommand('nmap', '192.0.2.10', { noReverseDns: true }).args,
+    ['-sT', '-sV', '--open', '-oX', '-', '-n', '192.0.2.10'])
+  assert.deepEqual(scanCommand('httpx', 'https://192.0.2.10', { noReverseDns: true }).args,
+    ['-u', 'https://192.0.2.10', '-json', '-silent'])
+})

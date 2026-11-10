@@ -10,13 +10,16 @@ test('scan preferences persist independently without replacing existing tool pat
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   assert.deepEqual(normalizeScanPreferences(), {
     mode: 'standard', timeoutSeconds: 180, captureDiagnostics: true, maskHistory: false,
+    noReverseDns: false, maskAssetResults: false,
   })
   savePlatformConfig({ tools: { nmap: '/mock/nmap' }, env: { FOFA_KEY: 'fixture' } }, dir)
   const saved = savePlatformConfig({ scanPreferences: {
     mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false, maskHistory: true,
+    noReverseDns: true, maskAssetResults: true,
   } }, dir)
   assert.deepEqual(saved.scanPreferences, {
     mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false, maskHistory: true,
+    noReverseDns: true, maskAssetResults: true,
   })
   assert.equal(loadPlatformConfig(dir).tools.nmap, '/mock/nmap')
   assert.equal(loadPlatformConfig(dir).env.FOFA_KEY, 'fixture')
@@ -24,4 +27,6 @@ test('scan preferences persist independently without replacing existing tool pat
   assert.equal(reset.scanPreferences.timeoutSeconds, 180)
   assert.equal(reset.scanPreferences.mode, 'standard')
   assert.equal(reset.scanPreferences.maskHistory, true)
+  assert.equal(reset.scanPreferences.noReverseDns, true)
+  assert.equal(reset.scanPreferences.maskAssetResults, true)
 })

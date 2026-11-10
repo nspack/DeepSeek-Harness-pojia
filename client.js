@@ -7024,10 +7024,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [draft, setDraft] = React.useState(null)
       const [saved, setSaved] = React.useState(null)
       const [history, setHistory] = React.useState(null)
+      const [protection, setProtection] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
       const [message, setMessage] = React.useState('')
-      const defaults = { mode: 'standard', timeoutSeconds: 180, captureDiagnostics: true, maskHistory: false }
+      const defaults = { mode: 'standard', timeoutSeconds: 180, captureDiagnostics: true, maskHistory: false,
+        noReverseDns: false, maskAssetResults: false }
       React.useEffect(() => {
         let live = true
         setError(''); setMessage(''); setDraft(null); setHistory(null)
@@ -7037,6 +7039,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           const preferences = Object.assign({}, defaults, (r.config && r.config.scanPreferences) || {})
           setSaved(preferences); setDraft(preferences)
         }, (e) => { if (live) setError(String((e && e.message) || e)) })
+        api({ op: 'privacyPosture' }).then((r) => {
+          if (live && r && r.ok !== false) setProtection(r)
+        }, () => {})
         if (eng) api({ op: 'scanHistory', engagement: eng, limit: 1 }).then((r) => {
           if (live && r && r.ok !== false) setHistory(r)
         }, () => {})
@@ -7051,7 +7056,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setError((r && r.error) || '保存失败'); return }
           const current = Object.assign({}, defaults, (r.config && r.config.scanPreferences) || {})
           setSaved(current); setDraft(current)
-          setMessage('已保存，下一次 redteam_scan_run 起生效。已有历史记录不会被修改。')
+          setMessage('已保存。下一次扫描起使用新的执行偏好；界面遮蔽在重新打开相应页面后生效。')
+          api({ op: 'privacyPosture' }).then((v) => {
+            if (v && v.ok !== false) setProtection(v)
+          }, () => {})
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
       }
       const checkField = (key, label, description) => h('label', {
@@ -7094,8 +7102,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('captureDiagnostics', '保留详细错误诊断',
               '关闭后不保存扫描器 stderr，错误只记录退出状态；原始发现和必要执行证据仍保留。'),
             checkField('maskHistory', '在扫描记录页隐藏目标和本地路径',
-              '仅影响页面展示，不修改已有记录、扫描器真实目标或原始证据文件。'))
+              '仅影响页面展示，不修改已有记录、扫描器真实目标或原始证据文件。'),
+            checkField('maskAssetResults', '在测绘中心隐藏资产 IP、域名和详细记录',
+              '适合共享屏幕时使用；只影响测绘中心展示，不会编辑数据库或发送额外请求。'),
+            checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
+              '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '保护状态：已保护 / 可启用 / 仍会暴露'),
+            protection ? [
+              ['protected', '已生效', protection.protected || []],
+              ['available', '可启用', protection.available || []],
+              ['limitations', '尚不能保护', protection.limitations || []],
+            ].map(([key, title, entries]) => h('div', { key, style: { marginTop: 9 } },
+              h('b', { style: { fontSize: 12 } }, title + '（' + entries.length + '）'),
+              entries.map((item) => h('div', { key: item.id, style: { margin: '5px 0',
+                padding: '7px 9px', border: '1px solid var(--dsw-alias-border-l1)',
+                borderRadius: 6, fontSize: 12, lineHeight: 1.6 } },
+                h('b', null, item.label),
+                h('div', { style: { fontSize: 11, opacity: 0.8 } }, item.detail)))))
+              : h('div', { style: { fontSize: 12 } }, '读取当前真实配置与保护状态中…')),
           h('div', { className: 'rt-card' },
             h('h4', null, '实际生效范围'),
             h('div', { style: { fontSize: 12, lineHeight: 1.8 } },
@@ -7103,6 +7129,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 + ' · ' + saved.timeoutSeconds + ' 秒上限 · '
                 + (saved.captureDiagnostics ? '保存诊断' : '精简诊断') + ' · '
                 + (saved.maskHistory ? '历史界面遮蔽' : '历史界面显示详情')
+                + ' · ' + (saved.maskAssetResults ? '资产详情遮蔽' : '资产详情显示')
+                + ' · ' + (saved.noReverseDns ? '抑制 Nmap 反向 DNS' : 'Nmap 标准 DNS 行为')
                 : '尚未读取已保存配置',
               h('div', null, '本页只显示已保存的设置；尚未保存的修改不会影响扫描。'),
               history ? h('div', null,
@@ -7131,6 +7159,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [savedSources, setSavedSources] = React.useState(null)
       const [sourceBusy, setSourceBusy] = React.useState(false)
       const [sourceMsg, setSourceMsg] = React.useState('')
+      const [maskAssets, setMaskAssets] = React.useState(false)
+      const [maskSurvey, setMaskSurvey] = React.useState(false)
+      const [surveyKind, setSurveyKind] = React.useState('nmap')
+      const [surveyTarget, setSurveyTarget] = React.useState('')
+      const [surveyPorts, setSurveyPorts] = React.useState('80,443,8080,8443')
+      const [surveyCommit, setSurveyCommit] = React.useState(false)
+      const [surveyConfirm, setSurveyConfirm] = React.useState(false)
+      const [surveyBusy, setSurveyBusy] = React.useState(false)
+      const [surveyError, setSurveyError] = React.useState('')
+      const [surveyResult, setSurveyResult] = React.useState(null)
       const limit = 30
       React.useEffect(() => {
         let live = true
@@ -7138,6 +7176,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!live) return
           if (!r || r.ok === false) { setSourceMsg((r && r.error) || '读取平台列表失败'); return }
           setSources(Array.isArray(r.intelSources) ? r.intelSources : [])
+          setMaskAssets(!!(r.config?.scanPreferences?.maskAssetResults))
+          setMaskSurvey(!!(r.config?.scanPreferences?.maskHistory))
           const value = (r.config && r.config.intelSources) || { selected: ['local'], preferred: 'local' }
           const current = { selected: value.selected || ['local'], preferred: value.preferred || 'local' }
           setChosen(current); setSavedSources(current)
@@ -7165,6 +7205,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }, (e) => { setSourceBusy(false); setSourceMsg(String((e && e.message) || e)) })
       }
       const activeSources = sources.filter((x) => chosen.selected.includes(x.id))
+      const startSurvey = () => {
+        if (surveyBusy || !eng) return
+        if (!surveyTarget.trim()) { setSurveyError('请输入一个有权限检测的 IP、主机名或 HTTP URL'); return }
+        const engagement = eng
+        setSurveyBusy(true); setSurveyError(''); setSurveyResult(null)
+        api({ op: 'localActiveSurvey', engagement, kind: surveyKind,
+          target: surveyTarget.trim(), ports: surveyPorts.trim(),
+          commit: surveyCommit, confirm: surveyConfirm }).then((r) => {
+          setSurveyBusy(false)
+          if (!r || r.ok === false) {
+            setSurveyError((r && r.error) || '本地测绘执行未成功')
+            if (r) setSurveyResult(r)
+            return
+          }
+          setSurveyResult(r)
+          if (surveyCommit && r.ingested) setRefresh((n) => n + 1)
+        }, (e) => { setSurveyBusy(false); setSurveyError(String((e && e.message) || e)) })
+      }
       const examples = [
         ['域名和端口', 'domain="example.org" && port=443'],
         ['网页标题', 'title="登录"'],
@@ -7260,6 +7318,47 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
           h('div', { className: 'rt-card' },
+            h('h4', null, '本机主动测绘 · 单目标'),
+            h('div', { style: { fontSize: 12, opacity: 0.85, lineHeight: 1.65, marginBottom: 8 } },
+              '直接使用本机 Nmap / httpx，不调用 FOFA、Shodan 等厂商。扫描前核对本项目授权范围；未登记范围时需要你明确确认。'
+              + ' 可先预览并留存原始记录，或选择将已发现的单目标资产导入本地库。'),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8 } },
+              h('select', { className: 'rt-input', value: surveyKind,
+                onChange: (e) => setSurveyKind(e.target.value), style: { minWidth: 140 } },
+                h('option', { value: 'nmap' }, 'Nmap · 端口和服务'),
+                h('option', { value: 'httpx' }, 'httpx · Web 服务')),
+              h('input', { className: 'rt-input', style: { flex: '1 1 230px' },
+                value: surveyTarget, placeholder: surveyKind === 'nmap' ? '单个授权 IP 或域名' : 'https://单个授权目标',
+                onChange: (e) => setSurveyTarget(e.target.value) })),
+            surveyKind === 'nmap' ? h('label', { style: { display: 'block', fontSize: 12, marginTop: 8 } },
+              '端口（仅本次；默认 80,443,8080,8443）',
+              h('input', { className: 'rt-input', style: { width: '100%', marginTop: 4 },
+                value: surveyPorts, onChange: (e) => setSurveyPorts(e.target.value) })) : null,
+            h('div', { style: { display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10, fontSize: 12 } },
+              h('label', null,
+                h('input', { type: 'checkbox', checked: surveyCommit,
+                  onChange: (e) => setSurveyCommit(e.target.checked) }),
+                ' 执行后尝试入库（关闭则仅预览）'),
+              h('label', null,
+                h('input', { type: 'checkbox', checked: surveyConfirm,
+                  onChange: (e) => setSurveyConfirm(e.target.checked) }),
+                ' 已核对目标授权（项目未登记范围时必选）')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 10 },
+              disabled: surveyBusy || !eng, onClick: startSurvey },
+              surveyBusy ? '本机测绘进行中…' : '执行单目标测绘'),
+            surveyError ? h('div', { className: 'rt-err' }, surveyError) : null,
+            surveyResult ? h('div', { style: { fontSize: 12, marginTop: 9, lineHeight: 1.7 } },
+              '结果：' + (surveyResult.status || '未知') + ' · '
+                + (surveyCommit ? '入库请求' : '仅预览') + ' · 资产 '
+                + (surveyResult.assets || 0) + ' · 端口 ' + (surveyResult.ports || 0),
+              surveyResult.output_file
+                ? h('div', { style: { overflowWrap: 'anywhere' } },
+                    maskSurvey ? '原始文件位置已隐藏' : '已保存原始输出：' + surveyResult.output_file)
+                : null,
+              h('div', { style: { opacity: 0.8 } },
+                '不会因为成功退出就宣称发现已验证；请在「作战 → 扫描记录」检查证据。'))
+              : null),
+          h('div', { className: 'rt-card' },
             h('h4', null, '本地资产组合查询 · 已接通'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7, marginBottom: 9 } },
               '以下查询始终只使用当前项目的 SQLite 资产库，不会对外部平台发起请求。'),
@@ -7292,11 +7391,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           items.map((item) => h('div', { key: item.id, className: 'rt-card',
             style: { fontSize: 12, lineHeight: 1.65 } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
-              h('b', null, item.primary_name || item.ip),
-              h('span', { className: 'rt-mono', style: { opacity: 0.8 } }, item.ip),
+              h('b', null, maskAssets ? '资产标识已隐藏' : (item.primary_name || item.ip)),
+              h('span', { className: 'rt-mono', style: { opacity: 0.8 } },
+                maskAssets ? 'IP 已隐藏' : item.ip),
               h('span', { className: 'rt-tag' }, item.scope || 'unknown'),
               h('div', { className: 'rt-spacer' }),
-              h('button', { className: 'rt-btn', onClick: () => inspect(item.id) },
+              h('button', { className: 'rt-btn', disabled: maskAssets,
+                onClick: () => inspect(item.id) },
                 detailId === item.id ? '收起详情' : '查看证据详情')),
             h('div', null,
               '开放端口：' + ((item.ports || []).filter((p) => p.state === 'open')
@@ -7304,7 +7405,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { opacity: 0.8 } },
               '指纹：' + ((item.fingerprints || []).map((fp) => [fp.vendor, fp.product, fp.version]
                 .filter(Boolean).join(' ')).filter(Boolean).join(' · ') || '未采集')),
-            detailId === item.id ? h('div', { style: { marginTop: 8 } },
+            !maskAssets && detailId === item.id ? h('div', { style: { marginTop: 8 } },
               detail && detail.id === item.id
                 ? h('div', null,
                     h('div', null, '已登记域名：' + ((detail.names || []).map((n) => n.name).join(', ') || '无')),
