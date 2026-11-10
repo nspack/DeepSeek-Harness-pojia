@@ -6912,11 +6912,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [offset, setOffset] = React.useState(0)
       const [checking, setChecking] = React.useState('')
       const [checks, setChecks] = React.useState({})
+      const [maskHistory, setMaskHistory] = React.useState(false)
       const [reload, setReload] = React.useState(0)
       const checkEng = React.useRef(eng)
       checkEng.current = eng
 
       const limit = 15
+      React.useEffect(() => {
+        let active = true
+        api({ op: 'platformConfigGet' }).then((r) => {
+          if (active && r && r.config) setMaskHistory(!!(r.config.scanPreferences && r.config.scanPreferences.maskHistory))
+        }, () => {})
+        return () => { active = false }
+      }, [refreshKey])
       React.useEffect(() => {
         let live = true
         setData(null); setErr(''); setChecks({})
@@ -6968,7 +6976,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   + ' 组 · 重复目标 ' + feedback.repeated_targets + ' 组',
                 feedback.recommendation ? h('div', { style: { marginTop: 4 } },
                   '建议先处理：' + feedback.recommendation.title
-                    + '（' + feedback.recommendation.kind + ' · ' + feedback.recommendation.target + '）',
+                    + '（' + feedback.recommendation.kind + ' · ' + (maskHistory ? '目标已隐藏' : feedback.recommendation.target) + '）',
                   h('div', { style: { opacity: 0.8 } }, feedback.recommendation.detail))
                   : null,
                 feedback.repeated_targets > 0 ? h('div', { style: { fontSize: 11, opacity: 0.8 } },
@@ -6984,7 +6992,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             const check = checks[item.run_id]
             return h('div', { key: item.run_id, className: 'rt-card', style: { marginBottom: 8, fontSize: 12, lineHeight: 1.65 } },
               h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } },
-                h('b', null, (item.kind || '').toUpperCase() + ' · ' + (item.target || '未知目标')),
+                h('b', null, (item.kind || '').toUpperCase() + ' · ' + (maskHistory ? '目标已隐藏' : (item.target || '未知目标'))),
                 h('span', { className: 'rt-tag' + (item.status === 'imported' ? ' rt-tag-live' : item.status === 'failed' || item.status === 'timeout' || item.status === 'import-failed' ? ' rt-tag-warn' : '') },
                   labels[item.status] || item.status || '未知状态'),
                 h('div', { className: 'rt-spacer' }),
@@ -6994,9 +7002,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('div', { style: { fontSize: 11, opacity: 0.8 } },
                 '执行时间：' + (item.started_at || '未知') + ' · 大小：' + item.bytes + ' 字节'),
               h('div', null, '本次解析：资产 ' + item.assets + ' · 端口 ' + item.ports + ' · 漏洞候选 ' + item.vulns),
-              item.output_file ? h('div', { className: 'rt-mono', style: { fontSize: 11, overflowWrap: 'anywhere' } },
+              item.output_file && !maskHistory ? h('div', { className: 'rt-mono', style: { fontSize: 11, overflowWrap: 'anywhere' } },
                 '原始输出：' + item.output_file) : null,
-              item.error ? h('div', { className: 'rt-err' }, item.error) : null,
+              item.error ? h('div', { className: 'rt-err' }, maskHistory ? '执行有错误，详情已隐藏' : item.error) : null,
               check ? h('div', { style: { marginTop: 5, fontSize: 12 } },
                 check.status === 'verified' ? '文件校验通过（哈希与大小一致）'
                   : '文件校验未通过：' + (check.error || check.note || check.status || '未知')) : null,
@@ -7008,6 +7016,102 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('span', { style: { fontSize: 12 } }, (offset + 1) + '–' + Math.min(offset + limit, data.total) + ' / ' + data.total),
                 h('button', { className: 'rt-btn', disabled: offset + limit >= data.total, onClick: () => setOffset((x) => x + limit) }, '下一页'))
             : null))
+    }
+
+    /* ---------------------------------------------------------- 低干扰与隐私：仅限真实扫描偏好，不进行规避监测 */
+    function LowImpactTab(props) {
+      const eng = props.engagement
+      const [draft, setDraft] = React.useState(null)
+      const [saved, setSaved] = React.useState(null)
+      const [history, setHistory] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [message, setMessage] = React.useState('')
+      const defaults = { mode: 'standard', timeoutSeconds: 180, captureDiagnostics: true, maskHistory: false }
+      React.useEffect(() => {
+        let live = true
+        setError(''); setMessage(''); setDraft(null); setHistory(null)
+        api({ op: 'platformConfigGet' }).then((r) => {
+          if (!live) return
+          if (!r || r.ok === false) { setError((r && r.error) || '无法读取设置'); return }
+          const preferences = Object.assign({}, defaults, (r.config && r.config.scanPreferences) || {})
+          setSaved(preferences); setDraft(preferences)
+        }, (e) => { if (live) setError(String((e && e.message) || e)) })
+        if (eng) api({ op: 'scanHistory', engagement: eng, limit: 1 }).then((r) => {
+          if (live && r && r.ok !== false) setHistory(r)
+        }, () => {})
+        return () => { live = false }
+      }, [eng, props.refreshKey])
+      const update = (key, value) => setDraft((old) => old ? { ...old, [key]: value } : old)
+      const save = () => {
+        if (!draft || busy) return
+        setBusy(true); setError(''); setMessage('')
+        api({ op: 'platformConfigSave', config: { scanPreferences: draft } }).then((r) => {
+          setBusy(false)
+          if (!r || r.ok === false) { setError((r && r.error) || '保存失败'); return }
+          const current = Object.assign({}, defaults, (r.config && r.config.scanPreferences) || {})
+          setSaved(current); setDraft(current)
+          setMessage('已保存，下一次 redteam_scan_run 起生效。已有历史记录不会被修改。')
+        }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
+      }
+      const checkField = (key, label, description) => h('label', {
+        style: { display: 'flex', alignItems: 'flex-start', gap: 10, margin: '12px 0', fontSize: 13 },
+      }, h('input', { type: 'checkbox', disabled: busy, checked: !!draft[key],
+          onChange: (e) => update(key, !!e.target.checked), style: { marginTop: 3 } }),
+      h('span', null, h('b', null, label),
+        h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 4 } }, description)))
+      return h('div', { className: 'rt-main' },
+        h('div', { className: 'rt-toolbar' },
+          h('b', null, '低干扰与隐私'),
+          saved ? h('span', { className: 'rt-tag' }, saved.mode === 'low-impact' ? '低影响模式' : '标准模式') : null,
+          h('div', { className: 'rt-spacer' }),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save },
+            busy ? '保存中…' : '保存设置')),
+        h('div', { className: 'rt-pane', style: { minHeight: 0 } },
+          error ? h('div', { className: 'rt-err' }, error) : null,
+          message ? h('div', { className: 'rt-card' }, message) : null,
+          h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
+            h('h4', null, '能力边界'),
+            h('div', { style: { fontSize: 12 } },
+              '这里减少不必要的网络请求和本地敏感数据显示，不伪装来源、不规避目标侧监测，也不修改或删除目标的审计记录。网络请求仍可能出现在目标日志中。')),
+          draft ? h('div', { className: 'rt-card' },
+            h('h4', null, '单次探测设置'),
+            h('label', { style: { fontSize: 12, display: 'block', marginBottom: 10 } },
+              'Nmap 任务模式',
+              h('select', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 5 },
+                value: draft.mode, onChange: (e) => update('mode', e.target.value) },
+                h('option', { value: 'standard' }, '标准 · 端口 + 服务版本探测'),
+                h('option', { value: 'low-impact' }, '低影响 · 只做端口检查，最多重试 1 次'))),
+            h('div', { style: { fontSize: 12, opacity: 0.8, marginBottom: 12 } },
+              '低影响模式会跳过 Nmap 的 -sV 服务版本探测，减少请求，但服务指纹可能不完整。httpx 保持现有单目标请求参数。'),
+            h('label', { style: { fontSize: 12, display: 'block' } },
+              '单次扫描执行超时',
+              h('select', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 5 },
+                value: String(draft.timeoutSeconds),
+                onChange: (e) => update('timeoutSeconds', Number(e.target.value)) },
+                [30, 60, 120, 180, 300].map((sec) => h('option', { key: sec, value: sec },
+                  sec + ' 秒' + (sec === 180 ? '（原始默认）' : ''))))),
+            checkField('captureDiagnostics', '保留详细错误诊断',
+              '关闭后不保存扫描器 stderr，错误只记录退出状态；原始发现和必要执行证据仍保留。'),
+            checkField('maskHistory', '在扫描记录页隐藏目标和本地路径',
+              '仅影响页面展示，不修改已有记录、扫描器真实目标或原始证据文件。'))
+            : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '实际生效范围'),
+            h('div', { style: { fontSize: 12, lineHeight: 1.8 } },
+              saved ? '已保存：' + (saved.mode === 'low-impact' ? '低影响 Nmap' : '标准 Nmap')
+                + ' · ' + saved.timeoutSeconds + ' 秒上限 · '
+                + (saved.captureDiagnostics ? '保存诊断' : '精简诊断') + ' · '
+                + (saved.maskHistory ? '历史界面遮蔽' : '历史界面显示详情')
+                : '尚未读取已保存配置',
+              h('div', null, '本页只显示已保存的设置；尚未保存的修改不会影响扫描。'),
+              history ? h('div', null,
+                '当前项目已有 ' + history.total + ' 次扫描记录。最近一条：'
+                + (history.items && history.items[0]
+                  ? history.items[0].kind + ' · ' + history.items[0].status
+                  : '暂无记录')) : h('div', null, '选择项目后可查看真实扫描记录数量。'),
+              h('div', { style: { opacity: 0.8 } },
+                '本地 scan-output 中的原始输出和必要执行清单继续保留，用于核对扫描结果；不会替你删除证据。')))))
     }
 
     function EnvTab(props) {
@@ -9129,7 +9233,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
         { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['artex', 'ARTEX']] },
-        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
+        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
       const full = isFullWindow()
@@ -9157,6 +9261,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       if (err) body = h('div', { className: 'rt-err' }, err)
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
       else if (st.tab === 'env' || st.tab === 'knowledge') body = h(EnvTab, { refreshKey: refreshKey })
+      else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey })
        else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
       else if (st.tab === 'artex') body = h(ArtexTab)
       else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey: refreshKey })

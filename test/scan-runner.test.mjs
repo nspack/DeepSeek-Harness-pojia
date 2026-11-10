@@ -114,3 +114,34 @@ test('scanner output without recognized findings never reports a successful impo
   assert.equal(result.ingested, false)
   assert.equal(JSON.parse(readFileSync(result.manifestFile, 'utf8')).status, 'no-findings')
 })
+
+test('opt-in low-impact Nmap uses fewer service probes and a configured timeout', async (t) => {
+  const root = temp(t), executable = join(root, 'nmap.exe')
+  writeFileSync(executable, 'fixture')
+  const result = await runDiscoveryScan({
+    kind: 'nmap', target: '192.0.2.10', outputDir: join(root, 'runs'),
+  }, {
+    root, config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [],
+      scanPreferences: { mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false } },
+    env: { PATH: '' },
+    execFileFn: (path, argv, opt, callback) => {
+      assert.deepEqual(argv, ['-sT', '--open', '-oX', '-', '--max-retries', '1', '192.0.2.10'])
+      assert.equal(opt.timeout, 60000)
+      const error = new Error('secret local filename')
+      error.code = 2
+      callback(error, '<nmaprun/>', 'some secret stderr')
+    },
+  })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.scanPreferences.mode, 'low-impact')
+  assert.equal(result.scanPreferences.captureDiagnostics, false)
+  assert.equal(result.stderr, '')
+  assert.equal(result.error, 'scanner-exit-2')
+  assert.match(readFileSync(result.outputFile, 'utf8'), /nmaprun/)
+  assert.equal(JSON.parse(readFileSync(result.manifestFile, 'utf8')).stderr, '')
+})
+
+test('standard scan arguments remain unchanged if no preference was enabled', () => {
+  assert.deepEqual(scanCommand('nmap', '192.0.2.10').args,
+    ['-sT', '-sV', '--open', '-oX', '-', '192.0.2.10'])
+})
