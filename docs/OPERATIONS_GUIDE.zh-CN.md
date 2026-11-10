@@ -19,6 +19,8 @@
 
 **便携版 / D 盘安装**：ARTEX 的工具既可能安装在 `%LOCALAPPDATA%\\ARTEX\\tools`，也可能与 `artex.exe` 同目录放在 `tools/` 或 `data/tools/`。如需复用后两种布局，可给运行 DSH 的宿主环境设置 `ARTEX_HOME` 为 ARTEX 程序目录（例如 `D:\\Apps\\ARTEX`），重新启动 DSH 后在「资源 → ARTEX」重新检测。已有 `ARTEX_TOOL_DIRS` 配置仍优先，不必迁移或复制工具。只增加目录识别，不自动执行或启动任何工具。
 
+**ARTEX 报告交接（SARIF，只读）**：在 ARTEX 的漏洞列表中导出 **SARIF 2.1.0** 文件；回到 DSH 作战台的「资源 → ARTEX」，选择该 JSON/SARIF 文件。页面会预览来源、唯一漏洞数量、ARTEX 原始状态，以及每条漏洞的 `findingId`、`taskId` 和 `assetIds`。无需 ARTEX 服务在线或再输入凭据；文件只发送到当前 DSH 插件的本地解析接口，不写入作战台资产/漏洞库、不创建得分，也不会把 ARTEX 的 confirmed 自动当成 DSH 已验证。当前每次最多展示 50 条并说明未展示的数量；后续做双向同步时可复用这些稳定 ID。
+
 如果尚未建立靶标，切换入口、情报或报告等项目级页面，会出现明确的当前页标题和创建项目提示；需要先创建或选中靶标，才会出现对应记录。
 
 ## 二、首次打开（跟着做）
