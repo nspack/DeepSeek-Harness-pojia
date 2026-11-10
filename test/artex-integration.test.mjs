@@ -67,6 +67,23 @@ test('custom ARTEX_TOOL_DIRS are searched before managed binaries', (t) => {
   assert.ok(ARTEX_SHARED_TOOLS.includes('subfinder'))
 })
 
+test('optional ARTEX_HOME shares portable tools from data/tools and tools', (t) => {
+  const home = workspace(t)
+  const portable = join(home, 'ARTEX-portable')
+  const dataTool = put(join(portable, 'data', 'tools', 'katana', 'current', 'katana.exe'))
+  const fallbackTool = put(join(portable, 'tools', 'subfinder', '2.1.0', 'subfinder.exe'))
+  const env = { ARTEX_HOME: portable, PATH: '' }
+  assert.equal(findArtexTool('katana', { env, platform: 'win32' }), dataTool)
+  assert.equal(findArtexTool('subfinder', { env, platform: 'win32' }), fallbackTool)
+  const resolved = resolveTool('katana', {
+    root: join(home, 'dsh', 'redteam'),
+    config: { platform: 'windows', toolkitDir: join(home, 'empty'), binDirs: [], tools: {} },
+    env,
+  })
+  assert.equal(resolved.source, 'artex')
+  assert.equal(resolved.path, dataTool)
+})
+
 test('status separates live ARTEX from binary existence and never reports credentials', async (t) => {
   const home = workspace(t)
   const file = put(join(home, 'ARTEX', 'tools', 'dnsx', 'current', 'dnsx.exe'))
